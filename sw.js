@@ -1,11 +1,13 @@
 // Service Worker für den Essensplan.
-// Speichert die App-Dateien auf dem Gerät, damit die App auch offline startet.
-// Bei jeder Änderung an der App die Versionsnummer erhöhen (z. B. v2),
-// damit die iPhones die neuen Dateien laden.
-const VERSION = "essensplan-v1";
+// Strategie: Wenn das Netz da ist, wird immer die neueste Version geladen.
+// Ohne Netz startet die App aus dem Zwischenspeicher (offline).
+// Bei Änderungen an der Dateiliste unten die Versionsnummer erhöhen.
+const VERSION = "essensplan-v2";
 const DATEIEN = [
   "./",
   "index.html",
+  "style.css",
+  "app.js",
   "manifest.webmanifest",
   "icon-192.png",
   "icon-512.png",
@@ -14,7 +16,9 @@ const DATEIEN = [
 
 self.addEventListener("install", function (ereignis) {
   ereignis.waitUntil(
-    caches.open(VERSION).then(function (cache) { return cache.addAll(DATEIEN); })
+    caches.open(VERSION).then(function (cache) {
+      return cache.addAll(DATEIEN.map(function (d) { return new Request(d, { cache: "reload" }); }));
+    })
   );
   self.skipWaiting();
 });
@@ -31,12 +35,23 @@ self.addEventListener("activate", function (ereignis) {
   self.clients.claim();
 });
 
-// Erst im Cache nachsehen, sonst aus dem Netz laden.
 self.addEventListener("fetch", function (ereignis) {
-  if (ereignis.request.method !== "GET") return;
+  const anfrage = ereignis.request;
+  if (anfrage.method !== "GET" || new URL(anfrage.url).origin !== self.location.origin) return;
+
   ereignis.respondWith(
-    caches.match(ereignis.request).then(function (treffer) {
-      return treffer || fetch(ereignis.request);
-    })
+    fetch(anfrage, { cache: "no-cache" })
+      .then(function (antwort) {
+        if (antwort.ok) {
+          const kopie = antwort.clone();
+          caches.open(VERSION).then(function (cache) { cache.put(anfrage, kopie); });
+        }
+        return antwort;
+      })
+      .catch(function () {
+        return caches.match(anfrage, { ignoreSearch: true }).then(function (treffer) {
+          return treffer || caches.match("index.html");
+        });
+      })
   );
 });

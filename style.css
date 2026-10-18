@@ -1,0 +1,270 @@
+/* ===== Farben (dunkles Marineblau mit hellblauem Akzent) ===== */
+:root {
+  --bg: #051f2b;
+  --bg-tief: #031820;
+  --karte: #0a2f42;
+  --karte-hell: #0e3a52;
+  --linie: #14465f;
+  --akzent: #3bb8f6;
+  --akzent-schwach: rgba(59, 184, 246, 0.14);
+  --auf-akzent: #04202b;
+  --text: #f2f8fb;
+  --text-leise: #9db6c4;
+  --gefahr: #ff7b7b;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+@supports (height: 100dvh) { html, body { height: 100dvh; } }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== Kopfzeile ===== */
+header {
+  padding: calc(env(safe-area-inset-top) + 14px) 20px 14px;
+  border-bottom: 1px solid var(--linie);
+}
+header h1 { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
+
+main { flex: 1; overflow-y: auto; padding: 18px 16px 24px; }
+.ansicht { display: none; }
+.ansicht.aktiv { display: block; }
+
+/* ===== Karten und Texte ===== */
+.karte {
+  background: var(--karte);
+  border: 1px solid var(--linie);
+  border-radius: 16px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.karte h2 { margin: 0 0 8px; font-size: 1.1rem; }
+.karte p { margin: 0; color: var(--text-leise); line-height: 1.45; }
+.leise { color: var(--text-leise); }
+.status {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--akzent-schwach);
+  color: var(--akzent);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.leer { text-align: center; padding: 30px 18px; }
+.leer-symbol { font-size: 2.4rem; margin-bottom: 8px; }
+
+/* ===== Knöpfe ===== */
+.knopf {
+  font: inherit;
+  font-weight: 650;
+  border-radius: 12px;
+  padding: 13px 18px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.knopf-primaer { background: var(--akzent); color: var(--auf-akzent); }
+.knopf-sekundaer { background: var(--karte); color: var(--text); border-color: var(--linie); }
+.knopf-gefahr { background: var(--karte); color: var(--gefahr); border-color: var(--linie); }
+.knopf:active { opacity: 0.8; }
+.fab {
+  position: sticky;
+  bottom: 8px;
+  display: block;
+  width: max-content;
+  margin: 6px 0 0 auto;
+  border-radius: 999px;
+  padding: 14px 22px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.reihe { display: flex; gap: 10px; margin-top: 10px; }
+.reihe .knopf { flex: 1; }
+
+/* ===== Gerichte-Liste ===== */
+.gericht-karte {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--karte);
+  border: 1px solid var(--linie);
+  border-radius: 16px;
+  cursor: pointer;
+}
+.gericht-karte:active { background: var(--karte-hell); }
+.thumb {
+  flex: none;
+  width: 76px;
+  height: 76px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+.platzhalter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--karte-hell);
+  font-size: 1.8rem;
+}
+.gericht-info { min-width: 0; }
+.gericht-info h3 {
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.gericht-info p { margin: 0; color: var(--text-leise); font-size: 0.88rem; }
+
+/* ===== Vollbild-Ansicht (Detail und Formular) ===== */
+.blatt {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.blatt[hidden] { display: none; }
+.blatt-kopf {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: calc(env(safe-area-inset-top) + 10px) 12px 10px;
+  border-bottom: 1px solid var(--linie);
+}
+.blatt-kopf > :last-child { justify-self: end; }
+.blatt-titel { margin: 0; font-size: 1.05rem; font-weight: 650; }
+.textknopf {
+  font: inherit;
+  color: var(--akzent);
+  background: none;
+  border: 0;
+  padding: 8px;
+  cursor: pointer;
+}
+.textknopf.fett { font-weight: 700; }
+.blatt-inhalt {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 16px calc(32px + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ===== Detailansicht ===== */
+.detail-bild {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 16px;
+  margin-bottom: 16px;
+}
+.detail-titel { margin: 0 0 4px; font-size: 1.7rem; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.abschnitt { margin: 22px 0 10px; font-size: 0.8rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-leise); }
+.kacheln { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kachel {
+  background: var(--bg-tief);
+  border: 1px solid var(--linie);
+  border-radius: 14px;
+  padding: 14px;
+}
+.kachel .zahl { font-size: 1.5rem; font-weight: 700; }
+.kachel .name { margin-top: 2px; font-size: 0.8rem; color: var(--text-leise); }
+.zutatenliste { list-style: none; margin: 0; padding: 0; }
+.zutatenliste li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--linie);
+}
+.zutatenliste li span:last-child { color: var(--text-leise); white-space: nowrap; }
+.notizen { white-space: pre-wrap; line-height: 1.5; margin: 0; }
+
+/* ===== Formular ===== */
+.feld { display: block; margin-bottom: 16px; }
+.feld > span { display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-leise); }
+.eingabe {
+  width: 100%;
+  font: inherit;
+  font-size: 16px; /* verhindert das automatische Zoomen auf dem iPhone */
+  color: var(--text);
+  background: var(--karte);
+  border: 1px solid var(--linie);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.eingabe::placeholder { color: var(--text-leise); opacity: 0.7; }
+.eingabe:focus { outline: 2px solid var(--akzent); outline-offset: 1px; }
+textarea.eingabe { min-height: 90px; resize: vertical; }
+.zweispaltig { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.foto-knopf {
+  width: 100%;
+  padding: 26px 12px;
+  font: inherit;
+  color: var(--akzent);
+  background: var(--akzent-schwach);
+  border: 1.5px dashed var(--akzent);
+  border-radius: 14px;
+  cursor: pointer;
+}
+.form-bild { display: block; width: 100%; max-height: 240px; object-fit: cover; border-radius: 14px; }
+.zutat {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: var(--karte);
+  border: 1px solid var(--linie);
+  border-radius: 14px;
+}
+.zutat .eingabe { background: var(--bg); }
+.zutat-zeile2 { display: grid; grid-template-columns: 1fr 1.2fr auto; gap: 8px; }
+.entfernen {
+  font: inherit;
+  color: var(--gefahr);
+  background: none;
+  border: 1px solid var(--linie);
+  border-radius: 12px;
+  width: 44px;
+  cursor: pointer;
+}
+.fehler { color: var(--gefahr); font-weight: 600; margin: 4px 0 12px; }
+.fehler[hidden] { display: none; }
+
+/* ===== Untere Leiste ===== */
+footer.version { text-align: center; font-size: 0.72rem; color: var(--text-leise); padding: 0 0 8px; }
+nav {
+  display: flex;
+  background: var(--karte);
+  border-top: 1px solid var(--linie);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+nav button {
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 10px 4px 8px;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--text-leise);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+nav button .symbol { font-size: 1.4rem; line-height: 1; }
+nav button.aktiv { color: var(--akzent); font-weight: 650; }
