@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Essensplan</title>
+  <meta name="theme-color" content="#2f7d4f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Essensplan">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <style>
+    :root {
+      --gruen: #2f7d4f;
+      --gruen-hell: #e6f2ea;
+      --text: #1d2a22;
+      --text-leise: #5d6b63;
+      --hintergrund: #f7f8f6;
+      --karte: #ffffff;
+      --linie: #dfe5e0;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --gruen: #5fb883;
+        --gruen-hell: #1f3328;
+        --text: #eaf1ec;
+        --text-leise: #9fb0a5;
+        --hintergrund: #121714;
+        --karte: #1b221e;
+        --linie: #2a342e;
+      }
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--hintergrund);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: calc(env(safe-area-inset-top) + 14px) 20px 14px;
+      background: var(--gruen);
+      color: #fff;
+    }
+    header h1 { margin: 0; font-size: 1.35rem; font-weight: 650; }
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px 24px;
+    }
+    .ansicht { display: none; }
+    .ansicht.aktiv { display: block; }
+    .karte {
+      background: var(--karte);
+      border: 1px solid var(--linie);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .karte h2 { margin: 0 0 8px; font-size: 1.1rem; }
+    .karte p { margin: 0; color: var(--text-leise); line-height: 1.45; }
+    .status {
+      display: inline-block;
+      margin-top: 12px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--gruen-hell);
+      color: var(--gruen);
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    nav {
+      display: flex;
+      background: var(--karte);
+      border-top: 1px solid var(--linie);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    nav button {
+      flex: 1;
+      border: 0;
+      background: none;
+      padding: 10px 4px 8px;
+      font: inherit;
+      font-size: 0.72rem;
+      color: var(--text-leise);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+    nav button .symbol { font-size: 1.4rem; line-height: 1; }
+    nav button.aktiv { color: var(--gruen); font-weight: 650; }
+    footer.version {
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--text-leise);
+      padding: 0 0 10px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 id="titel">Gerichte</h1>
+  </header>
+
+  <main>
+    <section id="gerichte" class="ansicht aktiv">
+      <div class="karte">
+        <h2>Deine Gerichte</h2>
+        <p>Hier legst du bald deine Gerichte an: mit Bild, Titel, Zutaten, Mengen und Nährwerten.</p>
+        <span class="status">Kommt in Sprint 2</span>
+      </div>
+    </section>
+
+    <section id="wochenplan" class="ansicht">
+      <div class="karte">
+        <h2>Wochenplan Mo–Fr</h2>
+        <p>Hier wählst du für jeden Tag ein Gericht aus. Ihr beide seht dann, was es wann gibt.</p>
+        <span class="status">Kommt in Sprint 4</span>
+      </div>
+    </section>
+
+    <section id="einkauf" class="ansicht">
+      <div class="karte">
+        <h2>Einkaufsliste</h2>
+        <p>Aus den geplanten Gerichten entsteht hier automatisch eure Einkaufsliste.</p>
+        <span class="status">Kommt in Sprint 5</span>
+      </div>
+    </section>
+  </main>
+
+  <footer class="version" id="version">Version 0.1 · Grundgerüst</footer>
+
+  <nav>
+    <button class="aktiv" data-ziel="gerichte" data-titel="Gerichte">
+      <span class="symbol">🍽️</span>Gerichte
+    </button>
+    <button data-ziel="wochenplan" data-titel="Wochenplan">
+      <span class="symbol">📅</span>Wochenplan
+    </button>
+    <button data-ziel="einkauf" data-titel="Einkaufsliste">
+      <span class="symbol">🛒</span>Einkauf
+    </button>
+  </nav>
+
+  <script>
+    // Navigation: Tippen auf einen Reiter zeigt die passende Ansicht.
+    const reiter = document.querySelectorAll("nav button");
+    const ansichten = document.querySelectorAll(".ansicht");
+    const titel = document.getElementById("titel");
+
+    reiter.forEach(function (knopf) {
+      knopf.addEventListener("click", function () {
+        reiter.forEach(function (k) { k.classList.remove("aktiv"); });
+        ansichten.forEach(function (a) { a.classList.remove("aktiv"); });
+        knopf.classList.add("aktiv");
+        document.getElementById(knopf.dataset.ziel).classList.add("aktiv");
+        titel.textContent = knopf.dataset.titel;
+      });
+    });
+
+    // Service Worker: macht die App installierbar und offline startbar.
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function (fehler) {
+          console.log("Service Worker konnte nicht registriert werden:", fehler);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
