@@ -13,11 +13,15 @@ let db = null;
 
 function datenbankOeffnen() {
   return new Promise(function (resolve, reject) {
-    const anfrage = indexedDB.open("essensplan", 1);
+    const anfrage = indexedDB.open("essensplan", 2);
     anfrage.onupgradeneeded = function () {
       const d = anfrage.result;
       if (!d.objectStoreNames.contains("gerichte")) {
         d.createObjectStore("gerichte", { keyPath: "id", autoIncrement: true });
+      }
+      // Ab Version 2: Wochenpläne (ein Eintrag pro Woche, Schlüssel = Datum des Montags)
+      if (!d.objectStoreNames.contains("wochenplan")) {
+        d.createObjectStore("wochenplan", { keyPath: "woche" });
       }
     };
     anfrage.onsuccess = function () { resolve(anfrage.result); };
@@ -33,11 +37,19 @@ function gerichteLaden() {
   });
 }
 
-// Führt eine Schreibaktion aus und wartet, bis sie wirklich gespeichert ist.
-function schreiben(aktion) {
+function plaeneLaden() {
   return new Promise(function (resolve, reject) {
-    const tx = db.transaction("gerichte", "readwrite");
-    const anfrage = aktion(tx.objectStore("gerichte"));
+    const anfrage = db.transaction("wochenplan", "readonly").objectStore("wochenplan").getAll();
+    anfrage.onsuccess = function () { resolve(anfrage.result); };
+    anfrage.onerror = function () { reject(anfrage.error); };
+  });
+}
+
+// Führt eine Schreibaktion aus und wartet, bis sie wirklich gespeichert ist.
+function schreiben(speicherName, aktion) {
+  return new Promise(function (resolve, reject) {
+    const tx = db.transaction(speicherName, "readwrite");
+    const anfrage = aktion(tx.objectStore(speicherName));
     tx.oncomplete = function () { resolve(anfrage.result); };
     tx.onerror = function () { reject(tx.error); };
     tx.onabort = function () { reject(tx.error); };
@@ -87,6 +99,7 @@ function pluralPortionen(n) { return n === 1 ? "Portion" : "Portionen"; }
 /* ---------- Zustand ---------- */
 
 let gerichte = [];
+let plaene = new Map(); // Wochenpläne: Schlüssel = Datum des Montags, z. B. "2026-10-19"
 
 /* ---------- Navigation ---------- */
 
@@ -153,7 +166,8 @@ function listeZeichnen() {
   box.replaceChildren.apply(box, teile);
 }
 
-function gerichtKarte(g) {
+// beiKlick ist optional: ohne Angabe öffnet ein Tipp die Detailansicht.
+function gerichtKarte(g, beiKlick) {
   const bild = g.bild
     ? el("img", { class: "thumb", src: g.bild, alt: "", loading: "lazy" })
     : el("div", { class: "thumb platzhalter", text: "🍽️" });
@@ -164,7 +178,7 @@ function gerichtKarte(g) {
   }
   meta.push(g.zutaten.length + (g.zutaten.length === 1 ? " Zutat" : " Zutaten"));
 
-  return el("button", { class: "gericht-karte", type: "button", onclick: function () { detailOeffnen(g.id); } },
+  return el("button", { class: "gericht-karte", type: "button", onclick: beiKlick || function () { detailOeffnen(g.id); } },
     bild,
     el("div", { class: "gericht-info" },
       el("h3", { text: g.titel }),
@@ -235,7 +249,7 @@ function detailOeffnen(id) {
 async function gerichtLoeschen(g) {
   if (!confirm("„" + g.titel + "“ wirklich löschen?")) return;
   try {
-    await schreiben(function (s) { return s.delete(g.id); });
+    await schreiben("gerichte", function (s) { return s.delete(g.id); });
     await alleNeuLaden();
     blattSchliessen();
   } catch (fehler) {
@@ -436,7 +450,7 @@ function formularOeffnen(gericht) {
 
     speichertGerade = true;
     try {
-      const id = await schreiben(function (s) { return s.put(datensatz); });
+      const id = await schreiben("gerichte", function (s) { return s.put(datensatz); });
       await alleNeuLaden();
       if (neu) blattSchliessen(); else detailOeffnen(id);
     } catch (f) {
@@ -466,6 +480,178 @@ function formularOeffnen(gericht) {
   if (neu) titelFeld.focus();
 }
 
+/* ---------- Wochenplaner ---------- */
+
+const TAGNAMEN = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+const TAGKURZ = ["Mo", "Di", "Mi", "Do", "Fr"];
+
+// Datum um n Tage verschieben (immer mittags, damit die Sommerzeit nichts verschiebt).
+function tagVerschieben(datum, tage) {
+  return new Date(datum.getFullYear(), datum.getMonth(), datum.getDate() + tage, 12);
+}
+
+function montagVon(datum) {
+  return tagVerschieben(datum, -((datum.getDay() + 6) % 7));
+}
+
+function datumSchluessel(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function kurzDatum(d) {
+  return String(d.getDate()).padStart(2, "0") + "." + String(d.getMonth() + 1).padStart(2, "0") + ".";
+}
+
+// Kalenderwoche nach ISO 8601 (die Woche gehört zu dem Jahr, in dem ihr Donnerstag liegt).
+function kalenderwoche(montag) {
+  const donnerstag = tagVerschieben(montag, 3);
+  const jahresanfang = new Date(donnerstag.getFullYear(), 0, 1, 12);
+  const tagImJahr = Math.round((donnerstag - jahresanfang) / 86400000);
+  return Math.floor(tagImJahr / 7) + 1;
+}
+
+// Am Wochenende wird meistens die kommende Woche geplant, daher startet die App dann dort.
+function standardWoche() {
+  const heute = new Date();
+  const montag = montagVon(heute);
+  return (heute.getDay() + 6) % 7 >= 5 ? tagVerschieben(montag, 7) : montag;
+}
+
+let angezeigteWoche = standardWoche();
+
+function wocheWechseln(richtung) {
+  angezeigteWoche = tagVerschieben(angezeigteWoche, 7 * richtung);
+  wochenplanZeichnen();
+}
+
+function kurzInfo(g) {
+  const teile = [zahlText(g.portionen) + " " + pluralPortionen(g.portionen)];
+  if (g.naehrwerte && g.naehrwerte.kcal !== null && g.naehrwerte.kcal !== undefined) {
+    teile.push(zahlText(g.naehrwerte.kcal) + " kcal");
+  }
+  return teile.join(" · ");
+}
+
+function wochenplanZeichnen() {
+  const box = document.getElementById("wochenplan");
+  const montag = angezeigteWoche;
+  const freitag = tagVerschieben(montag, 4);
+  const plan = plaene.get(datumSchluessel(montag));
+  const standard = standardWoche();
+  const heute = datumSchluessel(new Date());
+  const teile = [];
+
+  teile.push(el("div", { class: "woche-kopf" },
+    el("button", { class: "pfeil", type: "button", "aria-label": "Vorherige Woche", onclick: function () { wocheWechseln(-1); }, text: "‹" }),
+    el("div", { class: "woche-titel" },
+      el("div", { class: "woche-kw", text: "KW " + kalenderwoche(montag) }),
+      el("div", { class: "woche-datum", text: kurzDatum(montag) + " – " + kurzDatum(freitag) + freitag.getFullYear() })
+    ),
+    el("button", { class: "pfeil", type: "button", "aria-label": "Nächste Woche", onclick: function () { wocheWechseln(1); }, text: "›" })
+  ));
+
+  if (datumSchluessel(montag) !== datumSchluessel(standard)) {
+    teile.push(el("button", {
+      class: "textknopf zurueck", type: "button",
+      onclick: function () { angezeigteWoche = standardWoche(); wochenplanZeichnen(); },
+      text: "Zu KW " + kalenderwoche(standard)
+    }));
+  }
+
+  for (let i = 0; i < 5; i++) {
+    const tag = tagVerschieben(montag, i);
+    const id = plan ? plan.tage[i] : null;
+    // Wurde ein Gericht inzwischen gelöscht, erscheint der Tag wieder als leer.
+    const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
+    teile.push(tagKarte(i, tag, g || null, datumSchluessel(tag) === heute));
+  }
+  box.replaceChildren.apply(box, teile);
+}
+
+function tagKarte(index, tag, g, istHeute) {
+  let inhalt;
+  if (g) {
+    inhalt = [
+      g.bild
+        ? el("img", { class: "thumb klein", src: g.bild, alt: "", loading: "lazy" })
+        : el("div", { class: "thumb klein platzhalter", text: "🍽️" }),
+      el("div", { class: "gericht-info" }, el("h3", { text: g.titel }), el("p", { text: kurzInfo(g) }))
+    ];
+  } else {
+    inhalt = [el("span", { class: "tag-leer", text: "＋ Gericht wählen" })];
+  }
+  return el("button", {
+    class: "tag" + (istHeute ? " heute" : ""), type: "button", "aria-label": TAGNAMEN[index],
+    onclick: function () { gerichtWaehlen(index, g ? g.id : null); }
+  },
+    el("div", { class: "tag-datum" },
+      el("div", { class: "name", text: TAGKURZ[index] }),
+      el("div", { class: "datum", text: kurzDatum(tag) })
+    ),
+    el("div", { class: "tag-inhalt" }, inhalt)
+  );
+}
+
+// Zeigt die Gerichte zur Auswahl für einen Tag der gerade angezeigten Woche.
+function gerichtWaehlen(index, aktuelleId) {
+  const montag = angezeigteWoche;
+  const tag = tagVerschieben(montag, index);
+  const suche = el("input", {
+    type: "search", class: "eingabe", autocomplete: "off", autocapitalize: "off", placeholder: "Gericht suchen …"
+  });
+  const liste = el("div", { style: "margin-top: 14px" });
+
+  function listeZeichnen2() {
+    const q = suche.value.trim().toLowerCase();
+    const treffer = gerichte
+      .filter(function (g) { return g.titel.toLowerCase().indexOf(q) >= 0; })
+      .sort(function (a, b) { return a.titel.localeCompare(b.titel, "de"); });
+    if (gerichte.length === 0) {
+      liste.replaceChildren(el("div", { class: "karte" },
+        el("p", { text: "Du hast noch keine Gerichte angelegt. Lege sie zuerst im Reiter „Gerichte“ an." })));
+    } else if (treffer.length === 0) {
+      liste.replaceChildren(el("p", { class: "leise", text: "Kein Gericht gefunden." }));
+    } else {
+      liste.replaceChildren.apply(liste, treffer.map(function (g) {
+        return gerichtKarte(g, function () { tagSetzen(montag, index, g.id); });
+      }));
+    }
+  }
+  suche.addEventListener("input", listeZeichnen2);
+  listeZeichnen2();
+
+  blattZeigen({
+    titel: TAGNAMEN[index] + ", " + kurzDatum(tag),
+    links: { text: "Abbrechen", aktion: blattSchliessen },
+    inhalt: [
+      gerichte.length > 0 ? suche : null,
+      liste,
+      aktuelleId !== null && aktuelleId !== undefined
+        ? el("button", {
+            class: "knopf knopf-gefahr", type: "button", style: "width: 100%; margin-top: 8px",
+            onclick: function () { tagSetzen(montag, index, null); },
+            text: "Gericht für diesen Tag entfernen"
+          })
+        : null
+    ]
+  });
+}
+
+async function tagSetzen(montag, index, gerichtId) {
+  const schluessel = datumSchluessel(montag);
+  const alt = plaene.get(schluessel);
+  const plan = { woche: schluessel, tage: alt ? alt.tage.slice() : [null, null, null, null, null] };
+  plan.tage[index] = gerichtId;
+  try {
+    await schreiben("wochenplan", function (s) { return s.put(plan); });
+    plaene.set(schluessel, plan);
+    blattSchliessen();
+    wochenplanZeichnen();
+  } catch (fehler) {
+    alert("Das Speichern hat leider nicht geklappt.");
+  }
+}
+
 /* ---------- Zutaten-Vorschläge ---------- */
 
 // Alle bisher verwendeten Zutaten, damit beim Tippen z. B. "Mi" -> "Milch" vorgeschlagen wird.
@@ -484,7 +670,9 @@ function vorschlaegeAktualisieren() {
 
 async function alleNeuLaden() {
   gerichte = await gerichteLaden();
+  plaene = new Map((await plaeneLaden()).map(function (p) { return [p.woche, p]; }));
   listeZeichnen();
+  wochenplanZeichnen();
   vorschlaegeAktualisieren();
 }
 

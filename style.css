@@ -268,3 +268,54 @@ nav button {
 }
 nav button .symbol { font-size: 1.4rem; line-height: 1; }
 nav button.aktiv { color: var(--akzent); font-weight: 650; }
+
+/* ===== Wochenplaner ===== */
+.woche-kopf {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.pfeil {
+  width: 48px;
+  height: 48px;
+  font: inherit;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--text);
+  background: var(--karte);
+  border: 1px solid var(--linie);
+  border-radius: 14px;
+  cursor: pointer;
+}
+.pfeil:active { background: var(--karte-hell); }
+.woche-titel { text-align: center; }
+.woche-kw { font-size: 1.3rem; font-weight: 700; }
+.woche-datum { margin-top: 2px; font-size: 0.85rem; color: var(--text-leise); }
+.zurueck { display: block; margin: -4px auto 10px; }
+
+.tag {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 78px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--karte);
+  border: 1px solid var(--linie);
+  border-radius: 16px;
+  cursor: pointer;
+}
+.tag:active { background: var(--karte-hell); }
+.tag.heute { border-color: var(--akzent); }
+.tag-datum { flex: none; width: 48px; text-align: center; }
+.tag-datum .name { font-weight: 700; }
+.tag.heute .tag-datum .name { color: var(--akzent); }
+.tag-datum .datum { margin-top: 2px; font-size: 0.75rem; color: var(--text-leise); }
+.tag-inhalt { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
+.tag-leer { color: var(--akzent); font-weight: 600; }
+.thumb.klein { width: 56px; height: 56px; border-radius: 10px; font-size: 1.4rem; }
