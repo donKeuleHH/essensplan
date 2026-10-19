@@ -1,16 +1,18 @@
-/* ===== Farben (dunkles Marineblau mit hellblauem Akzent) ===== */
+/* ===== Farben (dunkler Schiefer mit warmem Bernstein-Akzent) ===== */
 :root {
-  --bg: #051f2b;
-  --bg-tief: #031820;
-  --karte: #0a2f42;
-  --karte-hell: #0e3a52;
-  --linie: #14465f;
-  --akzent: #3bb8f6;
-  --akzent-schwach: rgba(59, 184, 246, 0.14);
-  --auf-akzent: #04202b;
-  --text: #f2f8fb;
-  --text-leise: #9db6c4;
-  --gefahr: #ff7b7b;
+  --bg: #2a313c;
+  --bg-tief: #222831;
+  --karte: #323a47;
+  --karte-hell: #3b4452;
+  --linie: rgba(255, 255, 255, 0.07);
+  --akzent: #f5b73c;
+  --akzent-schwach: rgba(245, 183, 60, 0.15);
+  --auf-akzent: #2b2110;
+  --text: #eef1f5;
+  --text-leise: #9aa5b5;
+  --gefahr: #ff8a80;
+  --erhaben: 6px 6px 14px rgba(0, 0, 0, 0.32), -4px -4px 12px rgba(255, 255, 255, 0.035);
+  --eingesenkt: inset 3px 3px 8px rgba(0, 0, 0, 0.35), inset -2px -2px 6px rgba(255, 255, 255, 0.03);
   color-scheme: dark;
 }
 
@@ -34,7 +36,6 @@ header {
   justify-content: space-between;
   gap: 12px;
   padding: calc(env(safe-area-inset-top) + 14px) 20px 14px;
-  border-bottom: 1px solid var(--linie);
 }
 .sync-knopf {
   flex: none;
@@ -46,6 +47,7 @@ header {
   background: var(--karte);
   border: 1px solid var(--linie);
   border-radius: 999px;
+  box-shadow: var(--erhaben);
   cursor: pointer;
 }
 .sync-knopf[hidden] { display: none; }
@@ -62,9 +64,10 @@ main { flex: 1; overflow-y: auto; padding: 18px 16px 24px; }
 .karte {
   background: var(--karte);
   border: 1px solid var(--linie);
-  border-radius: 16px;
+  border-radius: 22px;
   padding: 18px;
   margin-bottom: 14px;
+  box-shadow: var(--erhaben);
 }
 .karte h2 { margin: 0 0 8px; font-size: 1.1rem; }
 .karte p { margin: 0; color: var(--text-leise); line-height: 1.45; }
@@ -86,14 +89,14 @@ main { flex: 1; overflow-y: auto; padding: 18px 16px 24px; }
 .knopf {
   font: inherit;
   font-weight: 650;
-  border-radius: 12px;
-  padding: 13px 18px;
+  border-radius: 999px;
+  padding: 13px 20px;
   border: 1px solid transparent;
   cursor: pointer;
 }
-.knopf-primaer { background: var(--akzent); color: var(--auf-akzent); }
-.knopf-sekundaer { background: var(--karte); color: var(--text); border-color: var(--linie); }
-.knopf-gefahr { background: var(--karte); color: var(--gefahr); border-color: var(--linie); }
+.knopf-primaer { background: var(--akzent); color: var(--auf-akzent); box-shadow: 0 6px 16px rgba(245, 183, 60, 0.25); }
+.knopf-sekundaer { background: var(--karte); color: var(--text); border-color: var(--linie); box-shadow: var(--erhaben); }
+.knopf-gefahr { background: var(--karte); color: var(--gefahr); border-color: var(--linie); box-shadow: var(--erhaben); }
 .knopf:active { opacity: 0.8; }
 .fab {
   position: sticky;
@@ -121,7 +124,8 @@ main { flex: 1; overflow-y: auto; padding: 18px 16px 24px; }
   color: inherit;
   background: var(--karte);
   border: 1px solid var(--linie);
-  border-radius: 16px;
+  border-radius: 22px;
+  box-shadow: var(--erhaben);
   cursor: pointer;
 }
 .gericht-karte:active { background: var(--karte-hell); }
@@ -129,7 +133,7 @@ main { flex: 1; overflow-y: auto; padding: 18px 16px 24px; }
   flex: none;
   width: 76px;
   height: 76px;
-  border-radius: 12px;
+  border-radius: 50%;
   object-fit: cover;
 }
 .platzhalter {
@@ -189,7 +193,7 @@ main { flex: 1; overflow-y: auto; padding: 18px 16px 24px; }
   width: 100%;
   max-height: 260px;
   object-fit: cover;
-  border-radius: 16px;
+  border-radius: 22px;
   margin-bottom: 16px;
 }
 .detail-titel { margin: 0 0 4px; font-size: 1.7rem; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; }
@@ -197,9 +201,9 @@ main { flex: 1; overflow-y: auto; padding: 18px 16px 24px; }
 .kacheln { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kachel {
   background: var(--bg-tief);
-  border: 1px solid var(--linie);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 14px;
+  box-shadow: var(--eingesenkt);
 }
 .kachel .zahl { font-size: 1.5rem; font-weight: 700; }
 .kachel .name { margin-top: 2px; font-size: 0.8rem; color: var(--text-leise); }
@@ -222,10 +226,11 @@ main { flex: 1; overflow-y: auto; padding: 18px 16px 24px; }
   font: inherit;
   font-size: 16px; /* verhindert das automatische Zoomen auf dem iPhone */
   color: var(--text);
-  background: var(--karte);
-  border: 1px solid var(--linie);
-  border-radius: 12px;
-  padding: 12px 14px;
+  background: var(--bg-tief);
+  border: 1px solid transparent;
+  border-radius: 16px;
+  padding: 13px 16px;
+  box-shadow: var(--eingesenkt);
 }
 .eingabe::placeholder { color: var(--text-leise); opacity: 0.7; }
 .eingabe:focus { outline: 2px solid var(--akzent); outline-offset: 1px; }
@@ -249,9 +254,10 @@ textarea.eingabe { min-height: 90px; resize: vertical; }
   margin-bottom: 10px;
   background: var(--karte);
   border: 1px solid var(--linie);
-  border-radius: 14px;
+  border-radius: 18px;
+  box-shadow: var(--erhaben);
 }
-.zutat .eingabe { background: var(--bg); }
+.zutat .eingabe { background: var(--bg-tief); }
 .zutat-zeile2 { display: grid; grid-template-columns: 1fr 1.2fr auto; gap: 8px; }
 .entfernen {
   font: inherit;
@@ -269,15 +275,19 @@ textarea.eingabe { min-height: 90px; resize: vertical; }
 footer.version { text-align: center; font-size: 0.72rem; color: var(--text-leise); padding: 0 0 8px; }
 nav {
   display: flex;
-  background: var(--karte);
-  border-top: 1px solid var(--linie);
-  padding-bottom: env(safe-area-inset-bottom);
+  gap: 6px;
+  margin: 4px 14px calc(env(safe-area-inset-bottom) + 10px);
+  padding: 6px;
+  background: var(--bg-tief);
+  border-radius: 999px;
+  box-shadow: var(--eingesenkt);
 }
 nav button {
   flex: 1;
   border: 0;
   background: none;
-  padding: 10px 4px 8px;
+  border-radius: 999px;
+  padding: 8px 4px 7px;
   font: inherit;
   font-size: 0.72rem;
   color: var(--text-leise);
@@ -287,7 +297,7 @@ nav button {
   gap: 3px;
 }
 nav button .symbol { font-size: 1.4rem; line-height: 1; }
-nav button.aktiv { color: var(--akzent); font-weight: 650; }
+nav button.aktiv { color: var(--auf-akzent); background: var(--akzent); font-weight: 700; box-shadow: 0 4px 12px rgba(245, 183, 60, 0.25); }
 
 /* ===== Wochenplaner ===== */
 .woche-kopf {
@@ -305,7 +315,8 @@ nav button.aktiv { color: var(--akzent); font-weight: 650; }
   color: var(--text);
   background: var(--karte);
   border: 1px solid var(--linie);
-  border-radius: 14px;
+  border-radius: 50%;
+  box-shadow: var(--erhaben);
   cursor: pointer;
 }
 .pfeil:active { background: var(--karte-hell); }
@@ -327,18 +338,19 @@ nav button.aktiv { color: var(--akzent); font-weight: 650; }
   color: inherit;
   background: var(--karte);
   border: 1px solid var(--linie);
-  border-radius: 16px;
+  border-radius: 22px;
+  box-shadow: var(--erhaben);
   cursor: pointer;
 }
 .tag:active { background: var(--karte-hell); }
-.tag.heute { border-color: var(--akzent); }
+.tag.heute { border-color: var(--akzent); box-shadow: var(--erhaben), 0 0 0 1px var(--akzent); }
 .tag-datum { flex: none; width: 48px; text-align: center; }
 .tag-datum .name { font-weight: 700; }
 .tag.heute .tag-datum .name { color: var(--akzent); }
 .tag-datum .datum { margin-top: 2px; font-size: 0.75rem; color: var(--text-leise); }
 .tag-inhalt { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
 .tag-leer { color: var(--akzent); font-weight: 600; }
-.thumb.klein { width: 56px; height: 56px; border-radius: 10px; font-size: 1.4rem; }
+.thumb.klein { width: 56px; height: 56px; border-radius: 50%; font-size: 1.4rem; }
 
 /* ===== Einkaufsliste ===== */
 .einkauf-info { margin: 0 0 4px; font-size: 0.88rem; }
@@ -356,7 +368,8 @@ nav button.aktiv { color: var(--akzent); font-weight: 650; }
   color: inherit;
   background: var(--karte);
   border: 1px solid var(--linie);
-  border-radius: 14px;
+  border-radius: 999px;
+  box-shadow: var(--erhaben);
   cursor: pointer;
 }
 .posten:active { background: var(--karte-hell); }
@@ -375,6 +388,6 @@ nav button.aktiv { color: var(--akzent); font-weight: 650; }
 }
 .posten-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .posten-menge { flex: none; color: var(--text-leise); white-space: nowrap; }
-.posten.erledigt { background: transparent; }
+.posten.erledigt { background: transparent; box-shadow: var(--eingesenkt); }
 .posten.erledigt .haken { background: var(--akzent); }
 .posten.erledigt .posten-name { text-decoration: line-through; color: var(--text-leise); }
