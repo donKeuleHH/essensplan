@@ -1,8 +1,10 @@
 "use strict";
 
 /* =====================================================================
-   Essensplan – Sprint 2: Gerichte anlegen, ansehen, bearbeiten, löschen
-   Alle Daten liegen auf dem Gerät (IndexedDB), es wird nichts verschickt.
+   Essensplan
+   Alle Daten liegen zuerst auf dem Gerät (IndexedDB), die App funktioniert
+   also auch offline. Ist in config.js ein Supabase-Projekt eingetragen und
+   man angemeldet, werden die Daten zusätzlich mit den anderen Geräten abgeglichen.
    ===================================================================== */
 
 const EINHEITEN = ["g", "kg", "ml", "l", "Stück", "EL", "TL", "Packung"];
@@ -13,7 +15,7 @@ let db = null;
 
 function datenbankOeffnen() {
   return new Promise(function (resolve, reject) {
-    const anfrage = indexedDB.open("essensplan", 3);
+    const anfrage = indexedDB.open("essensplan", 4);
     anfrage.onupgradeneeded = function () {
       const d = anfrage.result;
       if (!d.objectStoreNames.contains("gerichte")) {
@@ -26,6 +28,11 @@ function datenbankOeffnen() {
       // Ab Version 3: abgehakte Posten der Einkaufsliste (ein Eintrag pro Woche)
       if (!d.objectStoreNames.contains("einkauf")) {
         d.createObjectStore("einkauf", { keyPath: "woche" });
+      }
+      // Ab Version 4: Haken pro Einkaufsposten (Schlüssel = "Woche|Posten"), damit
+      // zwei Geräte gleichzeitig abhaken können. Der alte Speicher "einkauf" wird nur noch zum Übernehmen gelesen.
+      if (!d.objectStoreNames.contains("haken")) {
+        d.createObjectStore("haken", { keyPath: "id" });
       }
     };
     anfrage.onsuccess = function () { resolve(anfrage.result); };
@@ -57,6 +64,79 @@ function schreiben(speicherName, aktion) {
     tx.oncomplete = function () { resolve(anfrage.result); };
     tx.onerror = function () { reject(tx.error); };
     tx.onabort = function () { reject(tx.error); };
+  });
+}
+
+// Mehrere Speicher in einer gemeinsamen Transaktion schreiben (alles oder nichts).
+function transaktion(namen, aktion) {
+  return new Promise(function (resolve, reject) {
+    const tx = db.transaction(namen, "readwrite");
+    const speicher = {};
+    namen.forEach(function (n) { speicher[n] = tx.objectStore(n); });
+    aktion(speicher);
+    tx.oncomplete = function () { resolve(); };
+    tx.onerror = function () { reject(tx.error); };
+    tx.onabort = function () { reject(tx.error); };
+  });
+}
+
+// Zufällige ID (UUID) für neue Gerichte, damit sich zwei Geräte nie in die Quere kommen.
+function neueId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    const r = Math.floor(Math.random() * 16);
+    return (c === "x" ? r : (r & 3) | 8).toString(16);
+  });
+}
+
+// Kleine Merkzettel im Browser (z. B. bis wohin schon abgeglichen wurde).
+// Gehen sie verloren, wird beim nächsten Mal einfach alles neu abgeglichen.
+function merkenLesen(schluessel) {
+  try { return localStorage.getItem("essensplan." + schluessel); } catch (f) { return null; }
+}
+function merkenSchreiben(schluessel, wert) {
+  try { localStorage.setItem("essensplan." + schluessel, String(wert)); } catch (f) { /* nicht schlimm */ }
+}
+
+// Neuer Zeitstempel, der garantiert größer ist als der bisherige desselben Eintrags.
+function zeitNach(alt) {
+  return Math.max(Date.now(), alt && alt.aktualisiert ? alt.aktualisiert + 1 : 0);
+}
+
+// Einmalige Umstellung älterer Daten auf das Synchronisierungs-Format:
+// Gerichte bekommen eine UUID statt einer Zahl (der Wochenplan wird mit umgestellt),
+// die abgehakten Einkaufsposten werden zu einzelnen Haken. Danach ist alles "zu senden" markiert.
+async function datenMigrieren() {
+  const jetzt = Date.now();
+  const alteGerichte = (await alleLesen("gerichte")).filter(function (g) { return typeof g.id === "number"; });
+  const alteHaken = await alleLesen("einkauf");
+  if (alteGerichte.length === 0 && alteHaken.length === 0) return;
+
+  const neueIds = new Map();
+  alteGerichte.forEach(function (g) { neueIds.set(g.id, neueId()); });
+  const alteWochen = alteGerichte.length > 0 ? await alleLesen("wochenplan") : [];
+
+  await transaktion(["gerichte", "wochenplan", "haken", "einkauf"], function (s) {
+    alteGerichte.forEach(function (g) {
+      s.gerichte.delete(g.id);
+      s.gerichte.put(Object.assign({}, g, {
+        id: neueIds.get(g.id), geloescht: false, aktualisiert: g.geaendert || jetzt, dirty: 1
+      }));
+    });
+    alteWochen.forEach(function (p) {
+      s.wochenplan.put({
+        woche: p.woche,
+        tage: p.tage.map(function (id) { return typeof id === "number" ? (neueIds.get(id) || null) : id; }),
+        aktualisiert: jetzt,
+        dirty: 1
+      });
+    });
+    alteHaken.forEach(function (e) {
+      (e.abgehakt || []).forEach(function (posten) {
+        s.haken.put({ id: e.woche + "|" + posten, woche: e.woche, posten: posten, erledigt: true, aktualisiert: jetzt, dirty: 1 });
+      });
+    });
+    s.einkauf.clear();
   });
 }
 
@@ -102,9 +182,21 @@ function pluralPortionen(n) { return n === 1 ? "Portion" : "Portionen"; }
 
 /* ---------- Zustand ---------- */
 
-let gerichte = [];
-let plaene = new Map(); // Wochenpläne: Schlüssel = Datum des Montags, z. B. "2026-10-19"
-let einkaufStatus = new Map(); // abgehakte Posten der Einkaufsliste, je Woche
+let gerichteRoh = new Map(); // alle Gerichte inkl. gelöschter (der Löschmarker wird mit abgeglichen)
+let gerichte = [];           // nur die sichtbaren Gerichte
+let plaene = new Map();      // Wochenpläne: Schlüssel = Datum des Montags, z. B. "2026-10-19"
+let haken = new Map();       // abgehakte Einkaufsposten: Schlüssel = "Woche|Posten"
+
+function gerichteAbleiten() {
+  gerichte = Array.from(gerichteRoh.values()).filter(function (g) { return !g.geloescht; });
+}
+
+// Alle abgehakten Posten einer Woche.
+function abgehakteFuer(woche) {
+  const menge = new Set();
+  haken.forEach(function (h) { if (h.woche === woche && h.erledigt) menge.add(h.posten); });
+  return menge;
+}
 
 /* ---------- Navigation ---------- */
 
@@ -253,10 +345,16 @@ function detailOeffnen(id) {
 
 async function gerichtLoeschen(g) {
   if (!confirm("„" + g.titel + "“ wirklich löschen?")) return;
+  // Das Gericht wird nur als gelöscht markiert, damit das Löschen auch auf die anderen Geräte kommt.
+  const jetzt = Date.now();
+  const grab = Object.assign({}, g, {
+    bild: null, zutaten: [], geloescht: true, geaendert: jetzt, aktualisiert: zeitNach(g), dirty: 1
+  });
   try {
-    await schreiben("gerichte", function (s) { return s.delete(g.id); });
-    await alleNeuLaden();
+    await schreiben("gerichte", function (s) { return s.put(grab); });
+    await gerichteNeuLaden();
     blattSchliessen();
+    syncAnstossen();
   } catch (fehler) {
     alert("Das Löschen hat leider nicht geklappt.");
   }
@@ -264,13 +362,13 @@ async function gerichtLoeschen(g) {
 
 /* ---------- Formular: Gericht anlegen / bearbeiten ---------- */
 
-// Verkleinert ein Foto auf max. 900 Pixel Kantenlänge, damit der Speicher nicht vollläuft.
+// Verkleinert ein Foto auf max. 800 Pixel Kantenlänge, damit Speicher und Abgleich schnell bleiben.
 function bildVerkleinern(datei) {
   return new Promise(function (resolve, reject) {
     const url = URL.createObjectURL(datei);
     const bild = new Image();
     bild.onload = function () {
-      const faktor = Math.min(1, 900 / Math.max(bild.naturalWidth, bild.naturalHeight));
+      const faktor = Math.min(1, 800 / Math.max(bild.naturalWidth, bild.naturalHeight));
       const breite = Math.max(1, Math.round(bild.naturalWidth * faktor));
       const hoehe = Math.max(1, Math.round(bild.naturalHeight * faktor));
       const leinwand = document.createElement("canvas");
@@ -278,7 +376,7 @@ function bildVerkleinern(datei) {
       leinwand.height = hoehe;
       leinwand.getContext("2d").drawImage(bild, 0, 0, breite, hoehe);
       URL.revokeObjectURL(url);
-      resolve(leinwand.toDataURL("image/jpeg", 0.8));
+      resolve(leinwand.toDataURL("image/jpeg", 0.72));
     };
     bild.onerror = function () {
       URL.revokeObjectURL(url);
@@ -441,22 +539,27 @@ function formularOeffnen(gericht) {
       werte[felder[i][0]] = wert;
     }
 
+    const jetzt = Date.now();
     const datensatz = {
+      id: g.id || neueId(),
       titel: titel,
       bild: bild,
       portionen: portionen,
       zutaten: zutaten,
       naehrwerte: werte,
       notizen: notizenFeld.value.trim(),
-      erstellt: g.erstellt || Date.now(),
-      geaendert: Date.now()
+      erstellt: g.erstellt || jetzt,
+      geaendert: jetzt,
+      aktualisiert: zeitNach(g),
+      geloescht: false,
+      dirty: 1
     };
-    if (g.id !== undefined) datensatz.id = g.id;
 
     speichertGerade = true;
     try {
       const id = await schreiben("gerichte", function (s) { return s.put(datensatz); });
-      await alleNeuLaden();
+      await gerichteNeuLaden();
+      syncAnstossen();
       if (neu) blattSchliessen(); else detailOeffnen(id);
     } catch (f) {
       speichertGerade = false;
@@ -655,13 +758,18 @@ function gerichtWaehlen(index, aktuelleId) {
 async function tagSetzen(montag, index, gerichtId) {
   const schluessel = datumSchluessel(montag);
   const alt = plaene.get(schluessel);
-  const plan = { woche: schluessel, tage: alt ? alt.tage.slice() : [null, null, null, null, null] };
+  const plan = {
+    woche: schluessel,
+    tage: alt ? alt.tage.slice() : [null, null, null, null, null],
+    aktualisiert: zeitNach(alt),
+    dirty: 1
+  };
   plan.tage[index] = gerichtId;
   try {
     await schreiben("wochenplan", function (s) { return s.put(plan); });
-    plaene.set(schluessel, plan);
+    await plaeneNeuLaden();
     blattSchliessen();
-    wochenAnsichtenZeichnen();
+    syncAnstossen();
   } catch (fehler) {
     alert("Das Speichern hat leider nicht geklappt.");
   }
@@ -717,8 +825,7 @@ function einkaufZeichnen() {
   const box = document.getElementById("einkauf");
   const montag = angezeigteWoche;
   const ergebnis = einkaufslisteBerechnen(montag);
-  const status = einkaufStatus.get(datumSchluessel(montag));
-  const abgehakt = new Set(status ? status.abgehakt : []);
+  const abgehakt = abgehakteFuer(datumSchluessel(montag));
   const teile = wochenKopf();
 
   if (ergebnis.anzahlGerichte === 0) {
@@ -775,11 +882,15 @@ function postenZeile(p, erledigt, montag) {
   );
 }
 
-async function einkaufSpeichern(eintrag) {
-  einkaufStatus.set(eintrag.woche, eintrag);
+// Jeder Haken ist ein eigener Eintrag mit eigenem Zeitstempel. So können du und deine Frau
+// gleichzeitig im Supermarkt abhaken, ohne dass sich eure Haken überschreiben.
+async function hakenSpeichern(eintraege) {
+  eintraege.forEach(function (e) { haken.set(e.id, e); });
   einkaufZeichnen(); // sofort anzeigen, dann speichern
   try {
-    await schreiben("einkauf", function (s) { return s.put(eintrag); });
+    await transaktion(["haken"], function (s) { eintraege.forEach(function (e) { s.haken.put(e); }); });
+    await hakenNeuLaden();
+    syncAnstossen();
   } catch (fehler) {
     alert("Das Speichern hat leider nicht geklappt.");
   }
@@ -787,14 +898,22 @@ async function einkaufSpeichern(eintrag) {
 
 async function postenUmschalten(montag, schluessel) {
   const woche = datumSchluessel(montag);
-  const alt = einkaufStatus.get(woche);
-  const menge = new Set(alt ? alt.abgehakt : []);
-  if (menge.has(schluessel)) menge.delete(schluessel); else menge.add(schluessel);
-  await einkaufSpeichern({ woche: woche, abgehakt: Array.from(menge) });
+  const id = woche + "|" + schluessel;
+  const alt = haken.get(id);
+  await hakenSpeichern([{
+    id: id, woche: woche, posten: schluessel, erledigt: !(alt && alt.erledigt), aktualisiert: zeitNach(alt), dirty: 1
+  }]);
 }
 
 async function hakenZuruecksetzen(montag) {
-  await einkaufSpeichern({ woche: datumSchluessel(montag), abgehakt: [] });
+  const woche = datumSchluessel(montag);
+  const neue = [];
+  haken.forEach(function (h) {
+    if (h.woche === woche && h.erledigt) {
+      neue.push({ id: h.id, woche: h.woche, posten: h.posten, erledigt: false, aktualisiert: zeitNach(h), dirty: 1 });
+    }
+  });
+  if (neue.length > 0) await hakenSpeichern(neue);
 }
 
 // Öffnet das iPhone-Teilen-Menü (Nachrichten, WhatsApp, Notizen …) mit den offenen Posten.
@@ -836,13 +955,327 @@ function vorschlaegeAktualisieren() {
   liste.replaceChildren.apply(liste, namen.map(function (name) { return el("option", { value: name }); }));
 }
 
-async function alleNeuLaden() {
-  gerichte = await gerichteLaden();
-  plaene = new Map((await alleLesen("wochenplan")).map(function (p) { return [p.woche, p]; }));
-  einkaufStatus = new Map((await alleLesen("einkauf")).map(function (e) { return [e.woche, e]; }));
+/* ---------- Laden aus der Datenbank ---------- */
+
+// Liest einen Speicher neu ein und zeichnet die Ansichten neu. Starten kurz hintereinander
+// mehrere Ladevorgänge, zählt nur der neueste (ein älterer Stand überschreibt nie einen neueren).
+function ladefunktion(speicherName, uebernehmen) {
+  let zaehler = 0;
+  return async function () {
+    const meine = ++zaehler;
+    const daten = await alleLesen(speicherName);
+    if (meine !== zaehler) return;
+    uebernehmen(daten);
+  };
+}
+
+const gerichteNeuLaden = ladefunktion("gerichte", function (liste) {
+  gerichteRoh = new Map(liste.map(function (g) { return [g.id, g]; }));
+  gerichteAbleiten();
   listeZeichnen();
   wochenAnsichtenZeichnen();
   vorschlaegeAktualisieren();
+});
+
+const plaeneNeuLaden = ladefunktion("wochenplan", function (liste) {
+  plaene = new Map(liste.map(function (p) { return [p.woche, p]; }));
+  wochenAnsichtenZeichnen();
+});
+
+const hakenNeuLaden = ladefunktion("haken", function (liste) {
+  haken = new Map(liste.map(function (h) { return [h.id, h]; }));
+  einkaufZeichnen();
+});
+
+async function alleNeuLaden() {
+  await gerichteNeuLaden();
+  await plaeneNeuLaden();
+  await hakenNeuLaden();
+}
+
+/* ---------- Synchronisierung mit Supabase ---------- */
+
+// Prinzip: Die App arbeitet immer zuerst mit den Daten auf dem Gerät. Im Hintergrund werden
+// geänderte Einträge hochgeladen (push) und neue Einträge der anderen Geräte geholt (pull).
+// Bei einem Konflikt gewinnt die jüngere Änderung (Zeitstempel "aktualisiert").
+// Einträge mit "dirty: 1" sind lokal geändert und noch nicht hochgeladen.
+
+const KONFIG = window.ESSENSPLAN_CONFIG || {};
+let sb = null;            // Supabase-Client (nur wenn config.js ausgefüllt ist)
+let sbSitzung = null;     // aktuelle Anmeldung
+let syncStatus = "aus";   // aus | abgemeldet | laeuft | ok | offline | fehler
+let syncMeldung = "";
+let letzteSync = null;
+let syncLaeuft = false;
+let syncNochmal = false;
+let syncTimer = null;
+
+// Beschreibt für jede Tabelle, wie ein lokaler Eintrag in eine Zeile auf dem Server übersetzt wird und zurück.
+const SYNC_TABELLEN = [
+  {
+    name: "gerichte", speicher: "gerichte", konflikt: "id", block: 3,
+    liste: function () { return Array.from(gerichteRoh.values()); },
+    holen: function (schluessel) { return gerichteRoh.get(schluessel); },
+    neuLaden: function () { return gerichteNeuLaden(); },
+    schluesselLokal: function (r) { return r.id; },
+    schluesselServer: function (z) { return z.id; },
+    zuServer: function (g) {
+      return {
+        id: g.id,
+        daten: {
+          titel: g.titel, portionen: g.portionen, zutaten: g.zutaten, naehrwerte: g.naehrwerte,
+          notizen: g.notizen, erstellt: g.erstellt, geaendert: g.geaendert
+        },
+        bild: g.bild || null,
+        geloescht: !!g.geloescht,
+        aktualisiert: g.aktualisiert
+      };
+    },
+    vonServer: function (z) {
+      const d = z.daten || {};
+      return {
+        id: z.id, titel: d.titel || "", bild: z.bild || null, portionen: d.portionen || 1,
+        zutaten: d.zutaten || [], naehrwerte: d.naehrwerte || {}, notizen: d.notizen || "",
+        erstellt: d.erstellt || z.aktualisiert, geaendert: d.geaendert || z.aktualisiert,
+        geloescht: !!z.geloescht, aktualisiert: z.aktualisiert
+      };
+    }
+  },
+  {
+    name: "wochenplan", speicher: "wochenplan", konflikt: "woche", block: 20,
+    liste: function () { return Array.from(plaene.values()); },
+    holen: function (schluessel) { return plaene.get(schluessel); },
+    neuLaden: function () { return plaeneNeuLaden(); },
+    schluesselLokal: function (r) { return r.woche; },
+    schluesselServer: function (z) { return z.woche; },
+    zuServer: function (p) { return { woche: p.woche, tage: p.tage, aktualisiert: p.aktualisiert }; },
+    vonServer: function (z) { return { woche: z.woche, tage: z.tage, aktualisiert: z.aktualisiert }; }
+  },
+  {
+    name: "einkauf_haken", speicher: "haken", konflikt: "woche,posten", block: 50,
+    liste: function () { return Array.from(haken.values()); },
+    holen: function (schluessel) { return haken.get(schluessel); },
+    neuLaden: function () { return hakenNeuLaden(); },
+    schluesselLokal: function (r) { return r.id; },
+    schluesselServer: function (z) { return z.woche + "|" + z.posten; },
+    zuServer: function (h) { return { woche: h.woche, posten: h.posten, erledigt: h.erledigt, aktualisiert: h.aktualisiert }; },
+    vonServer: function (z) {
+      return { id: z.woche + "|" + z.posten, woche: z.woche, posten: z.posten, erledigt: z.erledigt, aktualisiert: z.aktualisiert };
+    }
+  }
+];
+
+// Lädt lokal geänderte Einträge hoch. Der Server verwirft Änderungen, die älter sind als sein Stand.
+async function pushen(spec) {
+  const offen = spec.liste().filter(function (r) { return r.dirty; });
+  for (let i = 0; i < offen.length; i += spec.block) {
+    const teil = offen.slice(i, i + spec.block);
+    const antwort = await sb.from(spec.name).upsert(teil.map(spec.zuServer), { onConflict: spec.konflikt });
+    if (antwort.error) throw antwort.error;
+    // Nur als "gesendet" markieren, was sich inzwischen nicht erneut geändert hat.
+    const gesendet = teil.map(function (r) {
+      const jetzt = spec.holen(spec.schluesselLokal(r));
+      return jetzt && jetzt.aktualisiert === r.aktualisiert ? Object.assign({}, jetzt, { dirty: 0 }) : null;
+    }).filter(Boolean);
+    if (gesendet.length > 0) {
+      await transaktion([spec.speicher], function (s) { gesendet.forEach(function (r) { s[spec.speicher].put(r); }); });
+      await spec.neuLaden();
+    }
+  }
+}
+
+// Holt Einträge, die sich auf dem Server seit dem letzten Mal geändert haben.
+// Rückgabe: true, wenn lokal etwas Neues angekommen ist.
+async function pullen(spec) {
+  const merkSchluessel = "sync." + KONFIG.url + "." + spec.name;
+  const gemerkt = Number(merkenLesen(merkSchluessel)) || 0;
+  // Ein kleiner Überlapp (50 Versionen) fängt Einträge ein, die gleichzeitig gespeichert wurden.
+  // Ist lokal noch nichts vorhanden, wird ohnehin alles geholt.
+  let cursor = spec.liste().length === 0 ? 0 : Math.max(0, gemerkt - 50);
+  let hoechste = gemerkt;
+  let geaendert = false;
+  for (;;) {
+    const antwort = await sb.from(spec.name).select("*").gt("version", cursor)
+      .order("version", { ascending: true }).limit(50);
+    if (antwort.error) throw antwort.error;
+    const zeilen = antwort.data || [];
+    const neue = [];
+    zeilen.forEach(function (z) {
+      const lokal = spec.holen(spec.schluesselServer(z));
+      if (!lokal || z.aktualisiert > lokal.aktualisiert) neue.push(Object.assign(spec.vonServer(z), { dirty: 0 }));
+    });
+    if (neue.length > 0) {
+      await transaktion([spec.speicher], function (s) { neue.forEach(function (r) { s[spec.speicher].put(r); }); });
+      await spec.neuLaden();
+      geaendert = true;
+    }
+    if (zeilen.length > 0) {
+      cursor = zeilen[zeilen.length - 1].version;
+      hoechste = Math.max(hoechste, cursor);
+    }
+    if (zeilen.length < 50) break;
+  }
+  merkenSchreiben(merkSchluessel, hoechste);
+  return geaendert;
+}
+
+async function synchronisieren() {
+  if (!sb) return;
+  if (syncLaeuft) { syncNochmal = true; return; }
+  syncLaeuft = true;
+  try {
+    const sitzung = await sb.auth.getSession();
+    sbSitzung = sitzung && sitzung.data ? sitzung.data.session : null;
+    if (!sbSitzung) { syncStatusSetzen("abgemeldet"); return; }
+    syncStatusSetzen("laeuft");
+    for (const spec of SYNC_TABELLEN) await pushen(spec);
+    for (const spec of SYNC_TABELLEN) await pullen(spec);
+    letzteSync = Date.now();
+    syncStatusSetzen("ok");
+  } catch (fehler) {
+    const text = fehler && fehler.message ? fehler.message : "";
+    syncStatusSetzen(navigator.onLine === false || /fetch|network|load failed/i.test(text) ? "offline" : "fehler", text);
+  } finally {
+    syncLaeuft = false;
+    if (syncNochmal) { syncNochmal = false; setTimeout(synchronisieren, 300); }
+  }
+}
+
+// Nach jeder lokalen Änderung kurz warten (mehrere Änderungen werden gebündelt) und dann abgleichen.
+function syncAnstossen() {
+  if (!sb) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(synchronisieren, 1500);
+}
+
+function syncStatusSetzen(status, meldung) {
+  syncStatus = status;
+  syncMeldung = meldung || "";
+  anzeigeAktualisieren();
+}
+
+// Kleiner Knopf oben rechts: zeigt den Stand und öffnet die Konto-Ansicht.
+function anzeigeAktualisieren() {
+  const knopf = document.getElementById("sync-knopf");
+  if (!knopf) return;
+  if (!sb) { knopf.hidden = true; return; }
+  const texte = { abgemeldet: "☁ Anmelden", laeuft: "⟳ Abgleich …", ok: "✓ Synchron", offline: "⚠ Offline", fehler: "⚠ Fehler" };
+  knopf.hidden = false;
+  knopf.textContent = texte[syncStatus] || "☁";
+  knopf.className = "sync-knopf s-" + syncStatus;
+}
+
+function kontoOeffnen(beimStart) {
+  if (!sb) return;
+  const links = { text: beimStart ? "Später" : "Schließen", aktion: blattSchliessen };
+  if (!sbSitzung) { anmeldeAnsicht(links); return; }
+
+  const email = sbSitzung.user && sbSitzung.user.email ? sbSitzung.user.email : "";
+  let zeile;
+  if (syncStatus === "ok" && letzteSync) {
+    zeile = "Zuletzt abgeglichen um " + new Date(letzteSync).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) + " Uhr.";
+  } else if (syncStatus === "offline") {
+    zeile = "Keine Verbindung. Deine Änderungen bleiben auf dem Gerät und werden nachgeholt, sobald du wieder online bist.";
+  } else if (syncStatus === "fehler") {
+    zeile = "Der letzte Abgleich hat nicht geklappt" + (syncMeldung ? ": " + syncMeldung : ".");
+  } else {
+    zeile = "Noch nicht abgeglichen.";
+  }
+
+  blattZeigen({
+    titel: "Konto",
+    links: links,
+    inhalt: [
+      el("div", { class: "karte" },
+        el("p", { class: "leise", text: "Angemeldet als" }),
+        el("h2", { text: email, style: "margin-top: 4px; overflow-wrap: anywhere" }),
+        el("p", { style: "margin-top: 12px", text: zeile })
+      ),
+      el("div", { class: "reihe" },
+        el("button", {
+          class: "knopf knopf-primaer", type: "button", text: "Jetzt abgleichen",
+          onclick: async function () { await synchronisieren(); if (!blatt.hidden) kontoOeffnen(false); }
+        }),
+        el("button", {
+          class: "knopf knopf-gefahr", type: "button", text: "Abmelden",
+          onclick: async function () {
+            if (!confirm("Abmelden? Deine Daten bleiben auf diesem Gerät, werden aber nicht mehr abgeglichen.")) return;
+            await sb.auth.signOut();
+            sbSitzung = null;
+            syncStatusSetzen("abgemeldet");
+            blattSchliessen();
+          }
+        })
+      )
+    ]
+  });
+}
+
+function anmeldeAnsicht(links) {
+  const email = el("input", {
+    type: "email", class: "eingabe", autocomplete: "username", autocapitalize: "off",
+    placeholder: "E-Mail", "aria-label": "E-Mail"
+  });
+  const passwort = el("input", {
+    type: "password", class: "eingabe", autocomplete: "current-password",
+    placeholder: "Passwort", "aria-label": "Passwort"
+  });
+  const fehler = el("p", { class: "fehler", hidden: true });
+  const knopf = el("button", { class: "knopf knopf-primaer", type: "button", style: "width: 100%", text: "Anmelden" });
+
+  function fehlerZeigen(text) { fehler.textContent = text; fehler.hidden = false; }
+
+  async function absenden() {
+    fehler.hidden = true;
+    if (!email.value.trim() || !passwort.value) return fehlerZeigen("Bitte E-Mail und Passwort eingeben.");
+    knopf.disabled = true;
+    knopf.textContent = "Anmelden …";
+    try {
+      const antwort = await sb.auth.signInWithPassword({ email: email.value.trim(), password: passwort.value });
+      if (antwort.error) throw antwort.error;
+      sbSitzung = antwort.data.session;
+      blattSchliessen();
+      anzeigeAktualisieren();
+      synchronisieren();
+    } catch (f) {
+      const text = f && f.message ? f.message : "";
+      if (/invalid login/i.test(text)) fehlerZeigen("E-Mail oder Passwort stimmt nicht.");
+      else if (/fetch|network|load failed/i.test(text)) fehlerZeigen("Keine Verbindung zum Server.");
+      else fehlerZeigen("Die Anmeldung hat nicht geklappt" + (text ? ": " + text : "."));
+      knopf.disabled = false;
+      knopf.textContent = "Anmelden";
+    }
+  }
+  knopf.addEventListener("click", absenden);
+  passwort.addEventListener("keydown", function (e) { if (e.key === "Enter") absenden(); });
+
+  blattZeigen({
+    titel: "Anmelden",
+    links: links,
+    inhalt: [
+      el("p", { class: "leise", style: "margin-bottom: 16px", text: "Melde dich an, damit gleichen sich eure Gerichte, Wochenpläne und Einkaufslisten auf allen Geräten ab." }),
+      el("label", { class: "feld" }, el("span", { text: "E-Mail" }), email),
+      el("label", { class: "feld" }, el("span", { text: "Passwort" }), passwort),
+      fehler,
+      knopf
+    ]
+  });
+}
+
+// Richtet die Verbindung ein, falls in config.js ein Supabase-Projekt eingetragen ist.
+function syncEinrichten() {
+  if (!KONFIG.url || !KONFIG.key || !window.supabase || !window.supabase.createClient) return false;
+  sb = window.supabase.createClient(KONFIG.url, KONFIG.key, {
+    auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+  });
+  sb.auth.onAuthStateChange(function (ereignis, sitzung) { sbSitzung = sitzung; anzeigeAktualisieren(); });
+  document.getElementById("sync-knopf").addEventListener("click", function () { kontoOeffnen(false); });
+  window.addEventListener("online", function () { synchronisieren(); });
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") synchronisieren();
+  });
+  setInterval(function () { if (document.visibilityState === "visible") synchronisieren(); }, 30000);
+  return true;
 }
 
 /* ---------- Start ---------- */
@@ -851,6 +1284,7 @@ async function start() {
   navigationEinrichten();
   try {
     db = await datenbankOeffnen();
+    await datenMigrieren();
     await alleNeuLaden();
     // Bittet das iPhone, die Daten nicht automatisch zu löschen.
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
@@ -861,6 +1295,23 @@ async function start() {
         el("p", { text: "Die App kann auf diesem Gerät gerade nichts speichern. Bitte nicht im privaten Modus öffnen." })
       )
     );
+    return;
+  }
+
+  // Synchronisierung: nur aktiv, wenn config.js ausgefüllt ist.
+  if (!syncEinrichten()) return;
+  anzeigeAktualisieren();
+  try {
+    const sitzung = await sb.auth.getSession();
+    sbSitzung = sitzung && sitzung.data ? sitzung.data.session : null;
+  } catch (fehler) {
+    sbSitzung = null;
+  }
+  if (sbSitzung) {
+    synchronisieren();
+  } else {
+    syncStatusSetzen("abgemeldet");
+    kontoOeffnen(true);
   }
 }
 

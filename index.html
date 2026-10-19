@@ -18,6 +18,7 @@
 <body>
   <header>
     <h1 id="titel">Gerichte</h1>
+    <button id="sync-knopf" class="sync-knopf" type="button" hidden></button>
   </header>
 
   <main>
@@ -28,7 +29,7 @@
     <section id="einkauf" class="ansicht"></section>
   </main>
 
-  <footer class="version">Version 0.4 · Einkaufsliste</footer>
+  <footer class="version">Version 0.5 · Synchronisierung</footer>
 
   <nav>
     <button class="aktiv" data-ziel="gerichte" data-titel="Gerichte">
@@ -48,6 +49,8 @@
   <!-- Vorschläge für Zutaten (wird von app.js gefüllt) -->
   <datalist id="zutatenvorschlaege"></datalist>
 
+  <script src="config.js"></script>
+  <script src="supabase.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
