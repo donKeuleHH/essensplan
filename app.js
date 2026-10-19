@@ -13,7 +13,7 @@ let db = null;
 
 function datenbankOeffnen() {
   return new Promise(function (resolve, reject) {
-    const anfrage = indexedDB.open("essensplan", 2);
+    const anfrage = indexedDB.open("essensplan", 3);
     anfrage.onupgradeneeded = function () {
       const d = anfrage.result;
       if (!d.objectStoreNames.contains("gerichte")) {
@@ -22,6 +22,10 @@ function datenbankOeffnen() {
       // Ab Version 2: Wochenpläne (ein Eintrag pro Woche, Schlüssel = Datum des Montags)
       if (!d.objectStoreNames.contains("wochenplan")) {
         d.createObjectStore("wochenplan", { keyPath: "woche" });
+      }
+      // Ab Version 3: abgehakte Posten der Einkaufsliste (ein Eintrag pro Woche)
+      if (!d.objectStoreNames.contains("einkauf")) {
+        d.createObjectStore("einkauf", { keyPath: "woche" });
       }
     };
     anfrage.onsuccess = function () { resolve(anfrage.result); };
@@ -37,9 +41,9 @@ function gerichteLaden() {
   });
 }
 
-function plaeneLaden() {
+function alleLesen(speicherName) {
   return new Promise(function (resolve, reject) {
-    const anfrage = db.transaction("wochenplan", "readonly").objectStore("wochenplan").getAll();
+    const anfrage = db.transaction(speicherName, "readonly").objectStore(speicherName).getAll();
     anfrage.onsuccess = function () { resolve(anfrage.result); };
     anfrage.onerror = function () { reject(anfrage.error); };
   });
@@ -100,6 +104,7 @@ function pluralPortionen(n) { return n === 1 ? "Portion" : "Portionen"; }
 
 let gerichte = [];
 let plaene = new Map(); // Wochenpläne: Schlüssel = Datum des Montags, z. B. "2026-10-19"
+let einkaufStatus = new Map(); // abgehakte Posten der Einkaufsliste, je Woche
 
 /* ---------- Navigation ---------- */
 
@@ -521,7 +526,36 @@ let angezeigteWoche = standardWoche();
 
 function wocheWechseln(richtung) {
   angezeigteWoche = tagVerschieben(angezeigteWoche, 7 * richtung);
+  wochenAnsichtenZeichnen();
+}
+
+// Wochenplan und Einkaufsliste zeigen immer dieselbe Woche.
+function wochenAnsichtenZeichnen() {
   wochenplanZeichnen();
+  einkaufZeichnen();
+}
+
+// Kopfzeile mit Blätter-Pfeilen, in Wochenplan und Einkaufsliste identisch.
+function wochenKopf() {
+  const montag = angezeigteWoche;
+  const freitag = tagVerschieben(montag, 4);
+  const standard = standardWoche();
+  const teile = [el("div", { class: "woche-kopf" },
+    el("button", { class: "pfeil", type: "button", "aria-label": "Vorherige Woche", onclick: function () { wocheWechseln(-1); }, text: "‹" }),
+    el("div", { class: "woche-titel" },
+      el("div", { class: "woche-kw", text: "KW " + kalenderwoche(montag) }),
+      el("div", { class: "woche-datum", text: kurzDatum(montag) + " – " + kurzDatum(freitag) + freitag.getFullYear() })
+    ),
+    el("button", { class: "pfeil", type: "button", "aria-label": "Nächste Woche", onclick: function () { wocheWechseln(1); }, text: "›" })
+  )];
+  if (datumSchluessel(montag) !== datumSchluessel(standard)) {
+    teile.push(el("button", {
+      class: "textknopf zurueck", type: "button",
+      onclick: function () { angezeigteWoche = standardWoche(); wochenAnsichtenZeichnen(); },
+      text: "Zu KW " + kalenderwoche(standard)
+    }));
+  }
+  return teile;
 }
 
 function kurzInfo(g) {
@@ -535,28 +569,9 @@ function kurzInfo(g) {
 function wochenplanZeichnen() {
   const box = document.getElementById("wochenplan");
   const montag = angezeigteWoche;
-  const freitag = tagVerschieben(montag, 4);
   const plan = plaene.get(datumSchluessel(montag));
-  const standard = standardWoche();
   const heute = datumSchluessel(new Date());
-  const teile = [];
-
-  teile.push(el("div", { class: "woche-kopf" },
-    el("button", { class: "pfeil", type: "button", "aria-label": "Vorherige Woche", onclick: function () { wocheWechseln(-1); }, text: "‹" }),
-    el("div", { class: "woche-titel" },
-      el("div", { class: "woche-kw", text: "KW " + kalenderwoche(montag) }),
-      el("div", { class: "woche-datum", text: kurzDatum(montag) + " – " + kurzDatum(freitag) + freitag.getFullYear() })
-    ),
-    el("button", { class: "pfeil", type: "button", "aria-label": "Nächste Woche", onclick: function () { wocheWechseln(1); }, text: "›" })
-  ));
-
-  if (datumSchluessel(montag) !== datumSchluessel(standard)) {
-    teile.push(el("button", {
-      class: "textknopf zurueck", type: "button",
-      onclick: function () { angezeigteWoche = standardWoche(); wochenplanZeichnen(); },
-      text: "Zu KW " + kalenderwoche(standard)
-    }));
-  }
+  const teile = wochenKopf();
 
   for (let i = 0; i < 5; i++) {
     const tag = tagVerschieben(montag, i);
@@ -646,9 +661,162 @@ async function tagSetzen(montag, index, gerichtId) {
     await schreiben("wochenplan", function (s) { return s.put(plan); });
     plaene.set(schluessel, plan);
     blattSchliessen();
-    wochenplanZeichnen();
+    wochenAnsichtenZeichnen();
   } catch (fehler) {
     alert("Das Speichern hat leider nicht geklappt.");
+  }
+}
+
+/* ---------- Einkaufsliste ---------- */
+
+// kg und l werden intern in g und ml gerechnet, damit z. B. 600 g + 700 g = 1,3 kg ergibt.
+const EINHEITEN_UMRECHNUNG = { g: ["g", 1], kg: ["g", 1000], ml: ["ml", 1], l: ["ml", 1000] };
+
+// Zählt die Zutaten aller für die Woche geplanten Gerichte zusammen.
+// Ein Gericht, das an mehreren Tagen geplant ist, zählt entsprechend mehrfach.
+function einkaufslisteBerechnen(montag) {
+  const plan = plaene.get(datumSchluessel(montag));
+  const posten = new Map();
+  let anzahlGerichte = 0;
+
+  (plan ? plan.tage : []).forEach(function (id) {
+    const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
+    if (!g) return;
+    anzahlGerichte++;
+    g.zutaten.forEach(function (z) {
+      const name = z.name.trim();
+      const hatMenge = z.menge !== null && z.menge !== undefined;
+      const umrechnung = EINHEITEN_UMRECHNUNG[z.einheit];
+      const gruppe = hatMenge ? (umrechnung ? umrechnung[0] : z.einheit) : "";
+      const schluessel = name.toLowerCase() + "|" + gruppe;
+      if (!posten.has(schluessel)) posten.set(schluessel, { schluessel: schluessel, name: name, gruppe: gruppe, summe: 0 });
+      if (hatMenge) posten.get(schluessel).summe += z.menge * (umrechnung ? umrechnung[1] : 1);
+    });
+  });
+
+  // Eine Zutat ohne Menge (z. B. "Salz") entfällt, wenn dieselbe Zutat anderswo mit Menge vorkommt.
+  const mitMenge = new Set();
+  posten.forEach(function (p) { if (p.gruppe) mitMenge.add(p.name.toLowerCase()); });
+
+  const liste = Array.from(posten.values()).filter(function (p) {
+    return p.gruppe || !mitMenge.has(p.name.toLowerCase());
+  }).sort(function (a, b) {
+    return a.name.localeCompare(b.name, "de") || a.gruppe.localeCompare(b.gruppe, "de");
+  });
+  return { posten: liste, anzahlGerichte: anzahlGerichte };
+}
+
+function mengeText(p) {
+  if (!p.gruppe) return "";
+  if (p.gruppe === "g") return p.summe >= 1000 ? zahlText(p.summe / 1000) + " kg" : zahlText(p.summe) + " g";
+  if (p.gruppe === "ml") return p.summe >= 1000 ? zahlText(p.summe / 1000) + " l" : zahlText(p.summe) + " ml";
+  return zahlText(p.summe) + " " + p.gruppe;
+}
+
+function einkaufZeichnen() {
+  const box = document.getElementById("einkauf");
+  const montag = angezeigteWoche;
+  const ergebnis = einkaufslisteBerechnen(montag);
+  const status = einkaufStatus.get(datumSchluessel(montag));
+  const abgehakt = new Set(status ? status.abgehakt : []);
+  const teile = wochenKopf();
+
+  if (ergebnis.anzahlGerichte === 0) {
+    teile.push(el("div", { class: "karte leer" },
+      el("div", { class: "leer-symbol", text: "🛒" }),
+      el("h2", { text: "Noch nichts zu kaufen" }),
+      el("p", { text: "Für diese Woche ist noch kein Gericht geplant. Wähle sie im Reiter „Wochenplan“ aus." })
+    ));
+  } else if (ergebnis.posten.length === 0) {
+    teile.push(el("div", { class: "karte" },
+      el("p", { text: "Die geplanten Gerichte haben keine Zutaten eingetragen." })
+    ));
+  } else {
+    const offen = ergebnis.posten.filter(function (p) { return !abgehakt.has(p.schluessel); });
+    const erledigt = ergebnis.posten.filter(function (p) { return abgehakt.has(p.schluessel); });
+
+    teile.push(el("p", {
+      class: "leise einkauf-info",
+      text: "Aus " + ergebnis.anzahlGerichte + (ergebnis.anzahlGerichte === 1 ? " geplantem Gericht" : " geplanten Gerichten") +
+        " · " + erledigt.length + " von " + ergebnis.posten.length + " erledigt"
+    }));
+
+    const knoepfe = [];
+    if (offen.length > 0) {
+      knoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { einkaufTeilen(montag, offen); }, text: "Liste teilen" }));
+    }
+    if (erledigt.length > 0) {
+      knoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { hakenZuruecksetzen(montag); }, text: "Haken entfernen" }));
+    }
+    if (knoepfe.length > 0) teile.push(el("div", { class: "reihe" }, knoepfe));
+
+    if (offen.length > 0) {
+      teile.push(el("div", { class: "posten-liste" }, offen.map(function (p) { return postenZeile(p, false, montag); })));
+    } else {
+      teile.push(el("p", { class: "leise", text: "Alles erledigt." }));
+    }
+    if (erledigt.length > 0) {
+      teile.push(el("h3", { class: "abschnitt", text: "Erledigt" }));
+      teile.push(el("div", { class: "posten-liste" }, erledigt.map(function (p) { return postenZeile(p, true, montag); })));
+    }
+  }
+  box.replaceChildren.apply(box, teile);
+}
+
+function postenZeile(p, erledigt, montag) {
+  return el("button", {
+    class: "posten" + (erledigt ? " erledigt" : ""), type: "button", role: "checkbox",
+    "aria-checked": erledigt ? "true" : "false",
+    onclick: function () { postenUmschalten(montag, p.schluessel); }
+  },
+    el("span", { class: "haken", text: erledigt ? "✓" : "" }),
+    el("span", { class: "posten-name", text: p.name }),
+    el("span", { class: "posten-menge", text: mengeText(p) })
+  );
+}
+
+async function einkaufSpeichern(eintrag) {
+  einkaufStatus.set(eintrag.woche, eintrag);
+  einkaufZeichnen(); // sofort anzeigen, dann speichern
+  try {
+    await schreiben("einkauf", function (s) { return s.put(eintrag); });
+  } catch (fehler) {
+    alert("Das Speichern hat leider nicht geklappt.");
+  }
+}
+
+async function postenUmschalten(montag, schluessel) {
+  const woche = datumSchluessel(montag);
+  const alt = einkaufStatus.get(woche);
+  const menge = new Set(alt ? alt.abgehakt : []);
+  if (menge.has(schluessel)) menge.delete(schluessel); else menge.add(schluessel);
+  await einkaufSpeichern({ woche: woche, abgehakt: Array.from(menge) });
+}
+
+async function hakenZuruecksetzen(montag) {
+  await einkaufSpeichern({ woche: datumSchluessel(montag), abgehakt: [] });
+}
+
+// Öffnet das iPhone-Teilen-Menü (Nachrichten, WhatsApp, Notizen …) mit den offenen Posten.
+async function einkaufTeilen(montag, offene) {
+  const freitag = tagVerschieben(montag, 4);
+  const zeilen = offene.map(function (p) {
+    const menge = mengeText(p);
+    return "• " + (menge ? menge + " " : "") + p.name;
+  });
+  const text = "Einkaufsliste KW " + kalenderwoche(montag) + " (" + kurzDatum(montag) + " – " +
+    kurzDatum(freitag) + freitag.getFullYear() + ")\n" + zeilen.join("\n");
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: "Einkaufsliste", text: text });
+    } else if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+      alert("Die Liste wurde kopiert.");
+    } else {
+      alert("Teilen wird auf diesem Gerät nicht unterstützt.");
+    }
+  } catch (fehler) {
+    if (!fehler || fehler.name !== "AbortError") alert("Das Teilen hat leider nicht geklappt.");
   }
 }
 
@@ -670,9 +838,10 @@ function vorschlaegeAktualisieren() {
 
 async function alleNeuLaden() {
   gerichte = await gerichteLaden();
-  plaene = new Map((await plaeneLaden()).map(function (p) { return [p.woche, p]; }));
+  plaene = new Map((await alleLesen("wochenplan")).map(function (p) { return [p.woche, p]; }));
+  einkaufStatus = new Map((await alleLesen("einkauf")).map(function (e) { return [e.woche, e]; }));
   listeZeichnen();
-  wochenplanZeichnen();
+  wochenAnsichtenZeichnen();
   vorschlaegeAktualisieren();
 }
 

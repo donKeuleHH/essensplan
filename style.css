@@ -319,3 +319,42 @@ nav button.aktiv { color: var(--akzent); font-weight: 650; }
 .tag-inhalt { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
 .tag-leer { color: var(--akzent); font-weight: 600; }
 .thumb.klein { width: 56px; height: 56px; border-radius: 10px; font-size: 1.4rem; }
+
+/* ===== Einkaufsliste ===== */
+.einkauf-info { margin: 0 0 4px; font-size: 0.88rem; }
+.posten-liste { margin-top: 12px; }
+.posten {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 54px;
+  margin-bottom: 8px;
+  padding: 10px 14px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--karte);
+  border: 1px solid var(--linie);
+  border-radius: 14px;
+  cursor: pointer;
+}
+.posten:active { background: var(--karte-hell); }
+.haken {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--akzent);
+  border-radius: 50%;
+  color: var(--auf-akzent);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.posten-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.posten-menge { flex: none; color: var(--text-leise); white-space: nowrap; }
+.posten.erledigt { background: transparent; }
+.posten.erledigt .haken { background: var(--akzent); }
+.posten.erledigt .posten-name { text-decoration: line-through; color: var(--text-leise); }
