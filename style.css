@@ -391,3 +391,44 @@ nav button.aktiv { color: var(--auf-akzent); background: var(--akzent); font-wei
 .posten.erledigt { background: transparent; box-shadow: var(--eingesenkt); }
 .posten.erledigt .haken { background: var(--akzent); }
 .posten.erledigt .posten-name { text-decoration: line-through; color: var(--text-leise); }
+
+/* ===== Wischen zum Entfernen ===== */
+.wisch { position: relative; margin-bottom: 12px; }
+.wisch > .gericht-karte, .wisch > .tag { margin-bottom: 0; position: relative; z-index: 1; touch-action: pan-y; }
+.wisch-aktion {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 88px;
+  font: inherit;
+  font-weight: 700;
+  color: #2d0f0c;
+  background: var(--gefahr);
+  border: 0;
+  border-radius: 22px;
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+}
+.wisch.offen > .wisch-aktion { opacity: 1; pointer-events: auto; }
+
+/* ===== Portionen-Schalter (Detailansicht) ===== */
+.schalter { display: flex; align-items: center; gap: 14px; margin-top: 8px; }
+.schritt {
+  width: 40px;
+  height: 40px;
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  color: var(--text);
+  background: var(--karte);
+  border: 1px solid var(--linie);
+  border-radius: 50%;
+  box-shadow: var(--erhaben);
+  cursor: pointer;
+}
+.schritt:active { background: var(--karte-hell); }
+.schritt-text { min-width: 120px; text-align: center; font-weight: 650; }
+.schritt-hinweis { margin: 8px 0 0; font-size: 0.8rem; }
+.schritt-hinweis[hidden] { display: none; }

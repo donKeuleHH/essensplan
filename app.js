@@ -239,6 +239,68 @@ function blattSchliessen() {
 
 /* ---------- Liste der Gerichte ---------- */
 
+/* ---------- Wischen zum Entfernen (nach links wischen, dann auf den roten Knopf tippen) ---------- */
+
+let offeneWischZeile = null;
+
+function wischZeile(inhalt, beschriftung, beiEntfernen) {
+  const BREITE = 96;
+  const aktion = el("button", {
+    class: "wisch-aktion", type: "button", tabindex: "-1", text: beschriftung,
+    onclick: function () { zumachen(); beiEntfernen(); }
+  });
+  const huelle = el("div", { class: "wisch" }, aktion, inhalt);
+  let startX = null, startY = 0, startVersatz = 0, versatz = 0, richtung = null, gezogen = false;
+
+  function setzen(wert, weich) {
+    versatz = wert;
+    inhalt.style.transition = weich ? "transform 0.2s ease" : "none";
+    inhalt.style.transform = wert ? "translateX(" + wert + "px)" : "";
+    huelle.classList.toggle("offen", wert < 0);
+  }
+  function zumachen() {
+    setzen(0, true);
+    if (offeneWischZeile === huelle) offeneWischZeile = null;
+  }
+  huelle.schliessen = zumachen;
+
+  inhalt.addEventListener("pointerdown", function (e) {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (offeneWischZeile && offeneWischZeile !== huelle) offeneWischZeile.schliessen();
+    startX = e.clientX; startY = e.clientY; startVersatz = versatz; richtung = null; gezogen = false;
+  });
+  inhalt.addEventListener("pointermove", function (e) {
+    if (startX === null) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (richtung === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      richtung = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
+      if (richtung === "h") { try { inhalt.setPointerCapture(e.pointerId); } catch (x) { /* egal */ } }
+    }
+    if (richtung !== "h") return;
+    gezogen = true;
+    setzen(Math.max(-BREITE - 24, Math.min(0, startVersatz + dx)), false);
+  });
+  function loslassen() {
+    if (startX === null) return;
+    startX = null;
+    if (!gezogen) return;
+    if (versatz < -BREITE / 2) {
+      setzen(-BREITE, true);
+      offeneWischZeile = huelle;
+    } else {
+      zumachen();
+    }
+  }
+  inhalt.addEventListener("pointerup", loslassen);
+  inhalt.addEventListener("pointercancel", loslassen);
+  // Nach dem Wischen soll kein Tipp ausgelöst werden; bei geöffneter Zeile schließt ein Tipp sie nur.
+  inhalt.addEventListener("click", function (e) {
+    if (gezogen) { gezogen = false; e.preventDefault(); e.stopImmediatePropagation(); return; }
+    if (versatz < 0) { e.preventDefault(); e.stopImmediatePropagation(); zumachen(); }
+  }, true);
+  return huelle;
+}
+
 function listeZeichnen() {
   const box = document.getElementById("gerichte");
   const sortiert = gerichte.slice().sort(function (a, b) { return a.titel.localeCompare(b.titel, "de"); });
@@ -251,7 +313,9 @@ function listeZeichnen() {
       el("p", { text: "Lege dein erstes Gericht an: mit Foto, Zutaten und Nährwerten." })
     ));
   } else {
-    sortiert.forEach(function (g) { teile.push(gerichtKarte(g)); });
+    sortiert.forEach(function (g) {
+      teile.push(wischZeile(gerichtKarte(g), "Löschen", function () { gerichtLoeschen(g); }));
+    });
   }
 
   teile.push(el("button", {
@@ -299,10 +363,40 @@ function detailOeffnen(id) {
   ];
   const hatNaehrwerte = werte.some(function (w) { return w[0] !== null && w[0] !== undefined; });
 
+  // Portionen-Schalter: rechnet nur die Anzeige um, das gespeicherte Gericht bleibt unverändert.
+  let anzeigePortionen = g.portionen;
+  const portionenText = el("span", { class: "schritt-text" });
+  const portionenHinweis = el("p", { class: "leise schritt-hinweis", hidden: true, text: "Umgerechnet, nur zur Ansicht. Das Gericht selbst bleibt unverändert." });
+  const zutatenUl = el("ul", { class: "zutatenliste" });
+  function skalierenZeichnen() {
+    const faktor = anzeigePortionen / g.portionen;
+    portionenText.textContent = "Für " + zahlText(anzeigePortionen) + " " + pluralPortionen(anzeigePortionen);
+    portionenHinweis.hidden = anzeigePortionen === g.portionen;
+    zutatenUl.replaceChildren.apply(zutatenUl, g.zutaten.map(function (z) {
+      const menge = z.menge === null || z.menge === undefined ? "" : zahlText(z.menge * faktor) + " " + z.einheit;
+      return el("li", {}, el("span", { text: z.name }), el("span", { text: menge }));
+    }));
+  }
+  function schritt(delta) {
+    const neu = anzeigePortionen + delta;
+    if (neu < 1 || neu > 99) return;
+    anzeigePortionen = neu;
+    skalierenZeichnen();
+  }
+  const portionenSchalter = el("div", {},
+    el("div", { class: "schalter" },
+      el("button", { class: "schritt", type: "button", "aria-label": "Eine Portion weniger", text: "−", onclick: function () { schritt(-1); } }),
+      portionenText,
+      el("button", { class: "schritt", type: "button", "aria-label": "Eine Portion mehr", text: "+", onclick: function () { schritt(1); } })
+    ),
+    portionenHinweis
+  );
+  skalierenZeichnen();
+
   const inhalt = [
     g.bild ? el("img", { class: "detail-bild", src: g.bild, alt: g.titel }) : null,
     el("h1", { class: "detail-titel", text: g.titel }),
-    el("p", { class: "leise", text: "Für " + zahlText(g.portionen) + " " + pluralPortionen(g.portionen) })
+    portionenSchalter
   ];
 
   if (hatNaehrwerte) {
@@ -320,10 +414,7 @@ function detailOeffnen(id) {
   if (g.zutaten.length === 0) {
     inhalt.push(el("p", { class: "leise", text: "Keine Zutaten eingetragen." }));
   } else {
-    inhalt.push(el("ul", { class: "zutatenliste" }, g.zutaten.map(function (z) {
-      const menge = z.menge === null || z.menge === undefined ? "" : zahlText(z.menge) + " " + z.einheit;
-      return el("li", {}, el("span", { text: z.name }), el("span", { text: menge }));
-    })));
+    inhalt.push(zutatenUl);
   }
 
   if (g.notizen) {
@@ -417,6 +508,21 @@ function formularOeffnen(gericht) {
   });
   const portionenFeld = el("input", {
     type: "text", class: "eingabe", inputmode: "numeric", autocomplete: "off", value: zahlText(g.portionen)
+  });
+
+  // Ändert man die Portionen, rechnen sich alle Mengen proportional um.
+  let letztePortionen = zahlLesen(portionenFeld.value);
+  portionenFeld.addEventListener("change", function () {
+    const neu = zahlLesen(portionenFeld.value);
+    if (neu === null || Number.isNaN(neu) || neu <= 0) return;
+    if (letztePortionen !== null && !Number.isNaN(letztePortionen) && letztePortionen > 0 && neu !== letztePortionen) {
+      const faktor = neu / letztePortionen;
+      zutatenListe.querySelectorAll(".z-menge").forEach(function (feld) {
+        const m = zahlLesen(feld.value);
+        if (m !== null && !Number.isNaN(m)) feld.value = zahlText(m * faktor);
+      });
+    }
+    letztePortionen = neu;
   });
 
   // Foto
@@ -574,7 +680,7 @@ function formularOeffnen(gericht) {
     inhalt: [
       el("label", { class: "feld" }, el("span", { text: "Titel" }), titelFeld),
       el("div", { class: "feld" }, el("span", { text: "Foto (optional)" }), bildBereich, dateiFeld),
-      el("label", { class: "feld" }, el("span", { text: "Anzahl Portionen" }), portionenFeld),
+      el("label", { class: "feld" }, el("span", { text: "Anzahl Portionen (Mengen rechnen sich automatisch um)" }), portionenFeld),
       el("h3", { class: "abschnitt", text: "Zutaten" }),
       zutatenListe,
       zutatHinzufuegen,
@@ -698,7 +804,7 @@ function tagKarte(index, tag, g, istHeute) {
   } else {
     inhalt = [el("span", { class: "tag-leer", text: "＋ Gericht wählen" })];
   }
-  return el("button", {
+  const karte = el("button", {
     class: "tag" + (istHeute ? " heute" : ""), type: "button", "aria-label": TAGNAMEN[index],
     onclick: function () { gerichtWaehlen(index, g ? g.id : null); }
   },
@@ -708,6 +814,8 @@ function tagKarte(index, tag, g, istHeute) {
     ),
     el("div", { class: "tag-inhalt" }, inhalt)
   );
+  if (!g) return karte;
+  return wischZeile(karte, "Entfernen", function () { tagSetzen(angezeigteWoche, index, null); });
 }
 
 // Zeigt die Gerichte zur Auswahl für einen Tag der gerade angezeigten Woche.
