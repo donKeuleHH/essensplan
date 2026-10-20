@@ -459,3 +459,58 @@ nav button.aktiv { color: var(--auf-akzent); background: var(--akzent); font-wei
 .wisch.pille > .posten { margin-bottom: 0; position: relative; z-index: 1; touch-action: pan-y; }
 .wisch.pille > .wisch-aktion { border-radius: 999px; }
 .eigen-marke { margin-left: 8px; padding: 2px 7px; font-size: 0.68rem; font-weight: 650; color: var(--text-leise); background: var(--bg-tief); border-radius: 999px; vertical-align: middle; }
+
+/* ===== Kachel-Ansicht der Einkaufsliste ===== */
+.posten-liste, .vorschlag-liste { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.posten, .vorschlag-kachel {
+  position: relative;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  min-height: 112px;
+  margin: 0;
+  padding: 12px 4px 10px;
+  text-align: center;
+  border-radius: 20px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.posten { display: flex; align-items: center; }
+.vorschlag-kachel {
+  display: flex;
+  align-items: center;
+  font: inherit;
+  color: var(--text-leise);
+  background: transparent;
+  border: 1.5px dashed var(--linie);
+  cursor: pointer;
+}
+.vorschlag-kachel:active { background: var(--karte-hell); }
+.symbol { font-size: 2.1rem; line-height: 1.1; }
+.symbol.buchstabe { font-weight: 800; color: var(--akzent); font-size: 2.2rem; }
+.posten .posten-name, .vorschlag-kachel .posten-name {
+  flex: none;
+  max-width: 100%;
+  font-size: 0.8rem;
+  font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: break-word;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+}
+.posten .posten-menge, .vorschlag-kachel .posten-menge { flex: none; font-size: 0.76rem; min-height: 1em; }
+.posten .haken {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  font-size: 0.75rem;
+  border: 0;
+  background: transparent;
+}
+.posten.erledigt { opacity: 0.55; box-shadow: var(--eingesenkt); }
+.posten.erledigt .haken { background: var(--akzent); }
+.posten.erledigt .posten-name { text-decoration: line-through; }
+.hinweis-klein { margin: 12px 0 0; font-size: 0.78rem; text-align: center; }

@@ -929,6 +929,79 @@ async function tagSetzen(montag, index, gerichtId) {
   }
 }
 
+/* ---------- Symbole für Artikel (Emoji; sonst der Anfangsbuchstabe) ---------- */
+
+const ARTIKEL_SYMBOLE = [
+  ["🍎", "apfel äpfel"], ["🍐", "birne"], ["🍌", "banane"], ["🍊", "orange mandarine clementine"], ["🍋", "zitrone limette"],
+  ["🍓", "erdbeere"], ["🍇", "traube"], ["🍉", "melone"], ["🍒", "kirsche"], ["🍑", "pfirsich nektarine"], ["🍍", "ananas"],
+  ["🥭", "mango"], ["🥝", "kiwi"], ["🍅", "tomate"], ["🥒", "gurke"], ["🫑", "paprika"], ["🥕", "möhre karotte"],
+  ["🌽", "mais"], ["🥔", "kartoffel"], ["🧅", "zwiebel"], ["🧄", "knoblauch"], ["🍄", "pilz champignon"],
+  ["🥬", "salat spinat kohl lauch mangold"], ["🥦", "brokkoli blumenkohl"], ["🍆", "aubergine"], ["🥑", "avocado"],
+  ["🎃", "kürbis"], ["🥜", "nuss nüsse erdnuss mandel"], ["🥥", "kokos kokosnuss kokosmilch"], ["🫒", "olive olivenöl"], ["🌶️", "chili pfeffer"],
+  ["🍞", "brot toast"], ["🥖", "brötchen baguette semmel"], ["🥐", "croissant"], ["🥨", "brezel"],
+  ["🍝", "nudel spaghetti pasta penne fusilli"], ["🍚", "reis"], ["🌾", "mehl haferflocken"], ["🍕", "pizza"],
+  ["🍔", "burger"], ["🍟", "pommes"], ["🌭", "wurst würstchen bratwurst"], ["🍰", "kuchen torte"], ["🍪", "keks kekse"],
+  ["🍫", "schokolade"], ["🍬", "bonbon gummibärchen süßigkeit"], ["🍯", "honig marmelade"], ["🥣", "müsli cornflakes"],
+  ["🍲", "suppe eintopf"], ["🥛", "milch joghurt sahne quark"], ["🧈", "butter margarine"], ["🧀", "käse"],
+  ["🥚", "ei eier"], ["🥩", "fleisch steak hack hackfleisch"], ["🍗", "hähnchen hühnchen huhn pute"], ["🥓", "speck schinken"],
+  ["🐟", "lachs fisch thunfisch forelle"], ["🦐", "garnele shrimp"], ["💧", "wasser sprudel"], ["🧃", "saft"],
+  ["☕", "kaffee espresso"], ["🍵", "tee"], ["🍺", "bier"], ["🍷", "wein"], ["🥂", "sekt prosecco"], ["🥤", "cola limo limonade"],
+  ["🧂", "salz"], ["🍦", "eis eiscreme"], ["🧻", "toilettenpapier klopapier küchenrolle"], ["🪥", "zahnpasta zahnbürste"],
+  ["🧼", "seife"], ["🧴", "shampoo spülmittel duschgel creme"], ["🧺", "waschmittel"], ["🗑️", "müllbeutel müllsack"],
+  ["🔋", "batterie batterien"], ["💡", "glühbirne"], ["🕯️", "kerze kerzen"], ["💐", "blume blumen"], ["🐾", "tierfutter katzenfutter hundefutter"]
+];
+const ARTIKEL_SYMBOL_INDEX = (function () {
+  const liste = [];
+  ARTIKEL_SYMBOLE.forEach(function (eintrag) {
+    eintrag[1].split(" ").forEach(function (wort) { liste.push([wort, eintrag[0]]); });
+  });
+  return liste;
+})();
+
+// Findet ein Emoji zum Artikelnamen. Deutsche Zusammensetzungen werden erkannt (Vollkornbrot -> Brot).
+function artikelSymbol(name) {
+  const woerter = String(name || "").toLowerCase().split(/[^a-zäöüß]+/).filter(Boolean);
+  let bestes = null, bestePunkte = 0;
+  woerter.forEach(function (w) {
+    ARTIKEL_SYMBOL_INDEX.forEach(function (k) {
+      const schluessel = k[0];
+      let punkte = 0;
+      if (w === schluessel) punkte = 100 + schluessel.length;
+      else if (schluessel.length >= 4 && w.endsWith(schluessel)) punkte = 50 + schluessel.length;
+      else if (schluessel.length >= 4 && w.startsWith(schluessel)) punkte = 20 + schluessel.length;
+      if (punkte > bestePunkte) { bestePunkte = punkte; bestes = k[1]; }
+    });
+  });
+  return bestes;
+}
+
+function symbolKnoten(name) {
+  const emoji = artikelSymbol(name);
+  if (emoji) return el("span", { class: "symbol", "aria-hidden": "true", text: emoji });
+  const buchstabe = String(name || "").trim().charAt(0).toUpperCase() || "?";
+  return el("span", { class: "symbol buchstabe", "aria-hidden": "true", text: buchstabe });
+}
+
+// Langes Drücken (ca. 0,6 s) löst eine Aktion aus; der anschließende Tipp wird dann nicht als Antippen gewertet.
+function langDruck(knopf, aktion) {
+  let timer = null, startX = 0, startY = 0, ausgeloest = false;
+  function abbrechen() { if (timer) { clearTimeout(timer); timer = null; } }
+  knopf.addEventListener("pointerdown", function (e) {
+    ausgeloest = false; startX = e.clientX; startY = e.clientY;
+    abbrechen();
+    timer = setTimeout(function () { timer = null; ausgeloest = true; aktion(); }, 600);
+  });
+  knopf.addEventListener("pointermove", function (e) {
+    if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) abbrechen();
+  });
+  knopf.addEventListener("pointerup", abbrechen);
+  knopf.addEventListener("pointercancel", abbrechen);
+  knopf.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  knopf.addEventListener("click", function (e) {
+    if (ausgeloest) { ausgeloest = false; e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+}
+
 /* ---------- Einkaufsliste ---------- */
 
 // kg und l werden intern in g und ml gerechnet, damit z. B. 600 g + 700 g = 1,3 kg ergibt.
@@ -1055,6 +1128,10 @@ function einkaufZeichnen() {
       teile.push(el("div", { class: "posten-liste" }, erledigt.map(zeile)));
     }
   }
+  if (eigene.length > 0) {
+    teile.push(el("p", { class: "leise hinweis-klein", text: "Eigene Artikel: gedrückt halten zum Entfernen." }));
+  }
+  zuletztVerwendet(woche).forEach(function (n) { teile.push(n); });
   box.replaceChildren.apply(box, teile);
   if (hatteFokus) {
     const feld = document.getElementById("extra-name");
@@ -1102,16 +1179,43 @@ function extraEingabe(woche) {
 }
 
 function extraZeile(e) {
-  const zeile = el("button", {
-    class: "posten" + (e.erledigt ? " erledigt" : ""), type: "button", role: "checkbox",
+  const kachel = el("button", {
+    class: "posten eigen" + (e.erledigt ? " erledigt" : ""), type: "button", role: "checkbox",
     "aria-checked": e.erledigt ? "true" : "false",
     onclick: function () { extraUmschalten(e.id); }
   },
     el("span", { class: "haken", text: e.erledigt ? "✓" : "" }),
-    el("span", { class: "posten-name" }, e.name, el("span", { class: "eigen-marke", text: "eigen" })),
+    symbolKnoten(e.name),
+    el("span", { class: "posten-name", text: e.name }),
     el("span", { class: "posten-menge", text: e.menge || "" })
   );
-  return wischZeile(zeile, "Löschen", function () { extraLoeschen(e.id); }, "pille");
+  // Eigene Artikel entfernt man durch langes Drücken.
+  langDruck(kachel, function () {
+    if (confirm("„" + e.name + "“ von der Liste entfernen?")) extraLoeschen(e.id);
+  });
+  return kachel;
+}
+
+// "Zuletzt verwendet": frühere eigene Artikel, die gerade nicht auf der Liste stehen. Ein Tipp setzt sie wieder drauf.
+function zuletztVerwendet(woche) {
+  const aktiv = new Set(extrasFuer(woche).map(function (e) { return e.name.toLowerCase(); }));
+  const kandidaten = Array.from(extraVorschlaege().values()).filter(function (e) { return !aktiv.has(e.name.toLowerCase()); })
+    .sort(function (a, b) { return b.aktualisiert - a.aktualisiert; }).slice(0, 12)
+    .sort(function (a, b) { return a.name.localeCompare(b.name, "de"); });
+  if (kandidaten.length === 0) return [];
+  return [
+    el("h3", { class: "abschnitt", text: "Zuletzt verwendet" }),
+    el("div", { class: "vorschlag-liste" }, kandidaten.map(function (e) {
+      return el("button", {
+        class: "vorschlag-kachel", type: "button", "aria-label": e.name + " wieder hinzufügen",
+        onclick: function () { extraHinzufuegen(woche, e.name, e.menge || ""); }
+      },
+        symbolKnoten(e.name),
+        el("span", { class: "posten-name", text: e.name }),
+        el("span", { class: "posten-menge", text: e.menge || "" })
+      );
+    }))
+  ];
 }
 
 async function extraSpeichern(eintraege) {
@@ -1170,6 +1274,7 @@ function postenZeile(p, erledigt, montag) {
     onclick: function () { postenUmschalten(montag, p.schluessel); }
   },
     el("span", { class: "haken", text: erledigt ? "✓" : "" }),
+    symbolKnoten(p.name),
     el("span", { class: "posten-name", text: p.name }),
     el("span", { class: "posten-menge", text: mengeText(p) })
   );
