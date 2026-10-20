@@ -348,6 +348,16 @@ nav button.aktiv { color: var(--akzent); background: var(--karte-hell); font-wei
 }
 .tag:active { background: var(--karte-hell); }
 .tag.heute { border-color: var(--akzent); box-shadow: var(--erhaben), 0 0 0 1px var(--akzent); }
+.tag { position: relative; }
+.sport-badge {
+  position: absolute; top: -9px; right: -4px; z-index: 3;
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: #4f9fe3; color: #0e2236;
+  border: 3px solid var(--bg); box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+.sport-badge svg { width: 17px; height: 17px; }
 .tag-datum { flex: none; width: 48px; text-align: center; }
 .tag-datum .name { font-weight: 700; }
 .tag.heute .tag-datum .name { color: var(--akzent); }

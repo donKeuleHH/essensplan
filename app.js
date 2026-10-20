@@ -842,12 +842,12 @@ function wochenplanZeichnen() {
     const id = plan ? plan.tage[i] : null;
     // Wurde ein Gericht inzwischen gelöscht, erscheint der Tag wieder als leer.
     const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
-    teile.push(tagKarte(i, tag, g || null, datumSchluessel(tag) === heute));
+    teile.push(tagKarte(i, tag, g || null, datumSchluessel(tag) === heute, sportTage(plan)[i]));
   }
   box.replaceChildren.apply(box, teile);
 }
 
-function tagKarte(index, tag, g, istHeute) {
+function tagKarte(index, tag, g, istHeute, istSport) {
   let inhalt;
   if (g) {
     inhalt = [
@@ -869,6 +869,13 @@ function tagKarte(index, tag, g, istHeute) {
     ),
     el("div", { class: "tag-inhalt" }, inhalt)
   );
+  if (istSport) {
+    const badge = el("span", { class: "sport-badge", title: "Sporttag" });
+    badge.innerHTML = SPORT_ICON;
+    karte.appendChild(badge);
+    karte.setAttribute("aria-label", TAGNAMEN[index] + ", Sporttag");
+  }
+  langDruck(karte, function () { sportUmschalten(angezeigteWoche, index); });
   if (!g) return karte;
   return wischZeile(karte, "Entfernen", function () { tagSetzen(angezeigteWoche, index, null); });
 }
@@ -921,12 +928,43 @@ function gerichtWaehlen(index, aktuelleId) {
   });
 }
 
+// Welche Tage der Woche Sporttage sind (immer eine Liste mit 5 Einträgen, wahr oder falsch).
+function sportTage(plan) {
+  const liste = plan && Array.isArray(plan.sport) ? plan.sport : [];
+  return [0, 1, 2, 3, 4].map(function (i) { return liste[i] === true; });
+}
+
+const SPORT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>';
+
+// Langes Drücken auf einen Tag: Sport-Badge an oder aus.
+async function sportUmschalten(montag, index) {
+  const schluessel = datumSchluessel(montag);
+  const alt = plaene.get(schluessel);
+  const sport = sportTage(alt);
+  sport[index] = !sport[index];
+  const plan = {
+    woche: schluessel,
+    tage: alt ? alt.tage.slice() : [null, null, null, null, null],
+    sport: sport,
+    aktualisiert: zeitNach(alt),
+    dirty: 1
+  };
+  try {
+    await schreiben("wochenplan", function (st) { return st.put(plan); });
+    await plaeneNeuLaden();
+    syncAnstossen();
+  } catch (fehler) {
+    alert("Das Speichern hat leider nicht geklappt.");
+  }
+}
+
 async function tagSetzen(montag, index, gerichtId) {
   const schluessel = datumSchluessel(montag);
   const alt = plaene.get(schluessel);
   const plan = {
     woche: schluessel,
     tage: alt ? alt.tage.slice() : [null, null, null, null, null],
+    sport: sportTage(alt),
     aktualisiert: zeitNach(alt),
     dirty: 1
   };
@@ -1492,8 +1530,8 @@ const SYNC_TABELLEN = [
     neuLaden: function () { return plaeneNeuLaden(); },
     schluesselLokal: function (r) { return r.woche; },
     schluesselServer: function (z) { return z.woche; },
-    zuServer: function (p) { return { woche: p.woche, tage: p.tage, aktualisiert: p.aktualisiert }; },
-    vonServer: function (z) { return { woche: z.woche, tage: z.tage, aktualisiert: z.aktualisiert }; }
+    zuServer: function (p) { return { woche: p.woche, tage: p.tage, sport: sportTage(p), aktualisiert: p.aktualisiert }; },
+    vonServer: function (z) { return { woche: z.woche, tage: z.tage, sport: sportTage(z), aktualisiert: z.aktualisiert }; }
   },
   {
     name: "einkauf_haken", speicher: "haken", konflikt: "woche,posten", block: 50,
