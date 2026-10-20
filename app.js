@@ -15,7 +15,7 @@ let db = null;
 
 function datenbankOeffnen() {
   return new Promise(function (resolve, reject) {
-    const anfrage = indexedDB.open("essensplan", 4);
+    const anfrage = indexedDB.open("essensplan", 5);
     anfrage.onupgradeneeded = function () {
       const d = anfrage.result;
       if (!d.objectStoreNames.contains("gerichte")) {
@@ -33,6 +33,10 @@ function datenbankOeffnen() {
       // zwei Geräte gleichzeitig abhaken können. Der alte Speicher "einkauf" wird nur noch zum Übernehmen gelesen.
       if (!d.objectStoreNames.contains("haken")) {
         d.createObjectStore("haken", { keyPath: "id" });
+      }
+      // Ab Version 5: eigene Artikel auf der Einkaufsliste (ein Eintrag pro Artikel und Woche)
+      if (!d.objectStoreNames.contains("extras")) {
+        d.createObjectStore("extras", { keyPath: "id" });
       }
     };
     anfrage.onsuccess = function () { resolve(anfrage.result); };
@@ -206,6 +210,8 @@ let gerichteRoh = new Map(); // alle Gerichte inkl. gelöschter (der Löschmarke
 let gerichte = [];           // nur die sichtbaren Gerichte
 let plaene = new Map();      // Wochenpläne: Schlüssel = Datum des Montags, z. B. "2026-10-19"
 let haken = new Map();       // abgehakte Einkaufsposten: Schlüssel = "Woche|Posten"
+let extras = new Map();      // eigene Artikel auf der Einkaufsliste: Schlüssel = id (inkl. gelöschter, für Vorschläge)
+let extraEntwurf = { name: "", menge: "" }; // halb getippter Artikel bleibt beim Neuzeichnen erhalten
 
 function gerichteAbleiten() {
   gerichte = Array.from(gerichteRoh.values()).filter(function (g) { return !g.geloescht; });
@@ -263,13 +269,13 @@ function blattSchliessen() {
 
 let offeneWischZeile = null;
 
-function wischZeile(inhalt, beschriftung, beiEntfernen) {
+function wischZeile(inhalt, beschriftung, beiEntfernen, klasse) {
   const BREITE = 96;
   const aktion = el("button", {
     class: "wisch-aktion", type: "button", tabindex: "-1", text: beschriftung,
     onclick: function () { zumachen(); beiEntfernen(); }
   });
-  const huelle = el("div", { class: "wisch" }, aktion, inhalt);
+  const huelle = el("div", { class: "wisch" + (klasse ? " " + klasse : "") }, aktion, inhalt);
   let startX = null, startY = 0, startVersatz = 0, versatz = 0, richtung = null, gezogen = false;
 
   function setzen(wert, weich) {
@@ -969,40 +975,62 @@ function mengeText(p) {
   return zahlText(p.summe) + " " + p.gruppe;
 }
 
+// Die eigenen Artikel einer Woche (ohne gelöschte), nach Name sortiert.
+function extrasFuer(woche) {
+  return Array.from(extras.values()).filter(function (e) { return e.woche === woche && !e.geloescht; })
+    .sort(function (a, b) { return a.name.localeCompare(b.name, "de"); });
+}
+
 function einkaufZeichnen() {
   const box = document.getElementById("einkauf");
   const montag = angezeigteWoche;
+  const woche = datumSchluessel(montag);
   const ergebnis = einkaufslisteBerechnen(montag);
-  const abgehakt = abgehakteFuer(datumSchluessel(montag));
+  const abgehakt = abgehakteFuer(woche);
+  const eigene = extrasFuer(woche);
+  const eigeneOffen = eigene.filter(function (e) { return !e.erledigt; });
+  const eigeneErledigt = eigene.filter(function (e) { return e.erledigt; });
+  const offen = ergebnis.posten.filter(function (p) { return !abgehakt.has(p.schluessel); });
+  const erledigt = ergebnis.posten.filter(function (p) { return abgehakt.has(p.schluessel); });
+
+  const hatteFokus = document.activeElement && document.activeElement.id === "extra-name";
   const teile = wochenKopf();
+  const eingabeZeile = extraEingabe(woche);
+  teile.push(eingabeZeile);
+
+  const knoepfe = [];
+  if (offen.length > 0 || eigeneOffen.length > 0) {
+    knoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { einkaufTeilen(montag, offen, eigeneOffen); }, text: "Liste teilen" }));
+  }
+  if (erledigt.length > 0 || eigeneErledigt.length > 0) {
+    knoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { hakenZuruecksetzen(montag); }, text: "Haken entfernen" }));
+  }
+
+  if (eigene.length > 0) {
+    teile.push(el("h3", { class: "abschnitt", text: "Eigene Artikel" }));
+    teile.push(el("div", { class: "posten-liste" },
+      eigeneOffen.concat(eigeneErledigt).map(function (e) { return extraZeile(e); })));
+  }
 
   if (ergebnis.anzahlGerichte === 0) {
-    teile.push(el("div", { class: "karte leer" },
-      el("div", { class: "leer-symbol", text: "🛒" }),
-      el("h2", { text: "Noch nichts zu kaufen" }),
-      el("p", { text: "Für diese Woche ist noch kein Gericht geplant. Wähle sie im Reiter „Wochenplan“ aus." })
-    ));
+    if (eigene.length === 0) {
+      teile.push(el("div", { class: "karte leer" },
+        el("div", { class: "leer-symbol", text: "🛒" }),
+        el("h2", { text: "Noch nichts zu kaufen" }),
+        el("p", { text: "Für diese Woche ist noch kein Gericht geplant. Wähle sie im Reiter „Wochenplan“ aus oder füge oben einen eigenen Artikel hinzu." })
+      ));
+    }
   } else if (ergebnis.posten.length === 0) {
     teile.push(el("div", { class: "karte" },
       el("p", { text: "Die geplanten Gerichte haben keine Zutaten eingetragen." })
     ));
   } else {
-    const offen = ergebnis.posten.filter(function (p) { return !abgehakt.has(p.schluessel); });
-    const erledigt = ergebnis.posten.filter(function (p) { return abgehakt.has(p.schluessel); });
-
+    if (eigene.length > 0) teile.push(el("h3", { class: "abschnitt", text: "Aus dem Wochenplan" }));
     teile.push(el("p", {
       class: "leise einkauf-info",
       text: "Aus " + ergebnis.anzahlGerichte + (ergebnis.anzahlGerichte === 1 ? " geplantem Gericht" : " geplanten Gerichten") +
         " · " + erledigt.length + " von " + ergebnis.posten.length + " erledigt"
     }));
-
-    const knoepfe = [];
-    if (offen.length > 0) {
-      knoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { einkaufTeilen(montag, offen); }, text: "Liste teilen" }));
-    }
-    if (erledigt.length > 0) {
-      knoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { hakenZuruecksetzen(montag); }, text: "Haken entfernen" }));
-    }
     if (knoepfe.length > 0) teile.push(el("div", { class: "reihe" }, knoepfe));
 
     if (offen.length > 0) {
@@ -1015,7 +1043,102 @@ function einkaufZeichnen() {
       teile.push(el("div", { class: "posten-liste" }, erledigt.map(function (p) { return postenZeile(p, true, montag); })));
     }
   }
+  // Gibt es keine Wochenplan-Posten, stehen die Knöpfe direkt unter dem Eingabefeld.
+  if (knoepfe.length > 0 && (ergebnis.anzahlGerichte === 0 || ergebnis.posten.length === 0)) {
+    teile.splice(teile.indexOf(eingabeZeile) + 1, 0, el("div", { class: "reihe" }, knoepfe));
+  }
   box.replaceChildren.apply(box, teile);
+  if (hatteFokus) {
+    const feld = document.getElementById("extra-name");
+    if (feld) { feld.focus(); try { feld.setSelectionRange(feld.value.length, feld.value.length); } catch (x) { /* egal */ } }
+  }
+}
+
+// Eingabezeile für eigene Artikel (Name, optionale Menge) mit Vorschlägen aus früheren Einträgen.
+function extraEingabe(woche) {
+  const name = el("input", {
+    type: "text", id: "extra-name", class: "eingabe", list: "extravorschlaege", autocomplete: "off",
+    autocapitalize: "sentences", placeholder: "Artikel hinzufügen", "aria-label": "Artikel", value: extraEntwurf.name
+  });
+  const menge = el("input", {
+    type: "text", id: "extra-menge", class: "eingabe extra-menge", autocomplete: "off",
+    placeholder: "Menge", "aria-label": "Menge (optional)", value: extraEntwurf.menge
+  });
+  name.addEventListener("input", function () { extraEntwurf.name = name.value; });
+  menge.addEventListener("input", function () { extraEntwurf.menge = menge.value; });
+  // Wählt man einen früheren Artikel aus, wird seine letzte Menge gleich mit eingetragen.
+  name.addEventListener("change", function () {
+    if (menge.value.trim() !== "") return;
+    const bekannt = extraVorschlaege().get(name.value.trim().toLowerCase());
+    if (bekannt && bekannt.menge) { menge.value = bekannt.menge; extraEntwurf.menge = bekannt.menge; }
+  });
+  return el("form", {
+    class: "extra-form",
+    onsubmit: function (e) { e.preventDefault(); extraHinzufuegen(woche, name.value, menge.value); }
+  },
+    name, menge,
+    el("button", { class: "knopf knopf-primaer extra-plus", type: "submit", "aria-label": "Zur Liste hinzufügen", text: "+" })
+  );
+}
+
+function extraZeile(e) {
+  const zeile = el("button", {
+    class: "posten" + (e.erledigt ? " erledigt" : ""), type: "button", role: "checkbox",
+    "aria-checked": e.erledigt ? "true" : "false",
+    onclick: function () { extraUmschalten(e.id); }
+  },
+    el("span", { class: "haken", text: e.erledigt ? "✓" : "" }),
+    el("span", { class: "posten-name", text: e.name }),
+    el("span", { class: "posten-menge", text: e.menge || "" })
+  );
+  return wischZeile(zeile, "Löschen", function () { extraLoeschen(e.id); }, "pille");
+}
+
+async function extraSpeichern(eintraege) {
+  eintraege.forEach(function (e) { extras.set(e.id, e); });
+  einkaufZeichnen(); // sofort anzeigen, dann speichern
+  extraVorschlaegeAktualisieren();
+  try {
+    await transaktion(["extras"], function (st) { eintraege.forEach(function (e) { st.extras.put(e); }); });
+    await extrasNeuLaden();
+    syncAnstossen();
+  } catch (fehler) {
+    alert("Das Speichern hat leider nicht geklappt.");
+  }
+}
+
+async function extraHinzufuegen(woche, nameText, mengeText2) {
+  const name = nameText.trim();
+  if (name === "") return;
+  const menge = mengeText2.trim();
+  extraEntwurf = { name: "", menge: "" };
+  // Gibt es den Artikel in dieser Woche schon, wird er nur wieder auf "offen" gesetzt.
+  const vorhanden = Array.from(extras.values()).find(function (e) {
+    return e.woche === woche && !e.geloescht && e.name.toLowerCase() === name.toLowerCase();
+  });
+  if (vorhanden) {
+    await extraSpeichern([Object.assign({}, vorhanden, {
+      erledigt: false, menge: menge || vorhanden.menge, aktualisiert: zeitNach(vorhanden), dirty: 1
+    })]);
+    return;
+  }
+  await extraSpeichern([{
+    id: neueId(), woche: woche, name: name, menge: menge, erledigt: false, geloescht: false,
+    aktualisiert: Date.now(), dirty: 1
+  }]);
+}
+
+async function extraUmschalten(id) {
+  const e = extras.get(id);
+  if (!e) return;
+  await extraSpeichern([Object.assign({}, e, { erledigt: !e.erledigt, aktualisiert: zeitNach(e), dirty: 1 })]);
+}
+
+async function extraLoeschen(id) {
+  const e = extras.get(id);
+  if (!e) return;
+  // Nur als gelöscht markiert: so verschwindet er auch auf dem anderen Gerät, und der Name bleibt als Vorschlag.
+  await extraSpeichern([Object.assign({}, e, { geloescht: true, erledigt: false, aktualisiert: zeitNach(e), dirty: 1 })]);
 }
 
 function postenZeile(p, erledigt, montag) {
@@ -1061,16 +1184,24 @@ async function hakenZuruecksetzen(montag) {
       neue.push({ id: h.id, woche: h.woche, posten: h.posten, erledigt: false, aktualisiert: zeitNach(h), dirty: 1 });
     }
   });
+  const neueExtras = [];
+  extras.forEach(function (e) {
+    if (e.woche === woche && e.erledigt && !e.geloescht) {
+      neueExtras.push(Object.assign({}, e, { erledigt: false, aktualisiert: zeitNach(e), dirty: 1 }));
+    }
+  });
   if (neue.length > 0) await hakenSpeichern(neue);
+  if (neueExtras.length > 0) await extraSpeichern(neueExtras);
 }
 
 // Öffnet das iPhone-Teilen-Menü (Nachrichten, WhatsApp, Notizen …) mit den offenen Posten.
-async function einkaufTeilen(montag, offene) {
+async function einkaufTeilen(montag, offene, eigeneOffen) {
   const freitag = tagVerschieben(montag, 4);
   const zeilen = offene.map(function (p) {
     const menge = mengeText(p);
     return "• " + (menge ? menge + " " : "") + p.name;
   });
+  (eigeneOffen || []).forEach(function (e) { zeilen.push("• " + (e.menge ? e.menge + " " : "") + e.name); });
   const text = "Einkaufsliste KW " + kalenderwoche(montag) + " (" + kurzDatum(montag) + " – " +
     kurzDatum(freitag) + freitag.getFullYear() + ")\n" + zeilen.join("\n");
   try {
@@ -1101,6 +1232,25 @@ function vorschlaegeAktualisieren() {
   });
   const namen = Array.from(gesehen.values()).sort(function (a, b) { return a.localeCompare(b, "de"); });
   liste.replaceChildren.apply(liste, namen.map(function (name) { return el("option", { value: name }); }));
+}
+
+// Frühere eigene Artikel (auch gelöschte) als Vorschläge: kleingeschriebener Name -> jüngster Eintrag.
+function extraVorschlaege() {
+  const karte = new Map();
+  extras.forEach(function (e) {
+    const k = e.name.toLowerCase();
+    const alt = karte.get(k);
+    if (!alt || e.aktualisiert > alt.aktualisiert) karte.set(k, e);
+  });
+  return karte;
+}
+
+function extraVorschlaegeAktualisieren() {
+  const liste = document.getElementById("extravorschlaege");
+  if (!liste) return;
+  const namen = Array.from(extraVorschlaege().values()).map(function (e) { return e.name; })
+    .sort(function (a, b) { return a.localeCompare(b, "de"); });
+  liste.replaceChildren.apply(liste, namen.map(function (n) { return el("option", { value: n }); }));
 }
 
 /* ---------- Laden aus der Datenbank ---------- */
@@ -1135,10 +1285,17 @@ const hakenNeuLaden = ladefunktion("haken", function (liste) {
   einkaufZeichnen();
 });
 
+const extrasNeuLaden = ladefunktion("extras", function (liste) {
+  extras = new Map(liste.map(function (e) { return [e.id, e]; }));
+  extraVorschlaegeAktualisieren();
+  einkaufZeichnen();
+});
+
 async function alleNeuLaden() {
   await gerichteNeuLaden();
   await plaeneNeuLaden();
   await hakenNeuLaden();
+  await extrasNeuLaden();
 }
 
 /* ---------- Synchronisierung mit Supabase ---------- */
@@ -1209,6 +1366,27 @@ const SYNC_TABELLEN = [
     zuServer: function (h) { return { woche: h.woche, posten: h.posten, erledigt: h.erledigt, aktualisiert: h.aktualisiert }; },
     vonServer: function (z) {
       return { id: z.woche + "|" + z.posten, woche: z.woche, posten: z.posten, erledigt: z.erledigt, aktualisiert: z.aktualisiert };
+    }
+  },
+  {
+    name: "einkauf_extra", speicher: "extras", konflikt: "id", block: 50,
+    liste: function () { return Array.from(extras.values()); },
+    holen: function (schluessel) { return extras.get(schluessel); },
+    neuLaden: function () { return extrasNeuLaden(); },
+    schluesselLokal: function (r) { return r.id; },
+    schluesselServer: function (z) { return z.id; },
+    zuServer: function (e) {
+      return {
+        id: e.id, woche: e.woche, daten: { name: e.name, menge: e.menge || "" },
+        erledigt: !!e.erledigt, geloescht: !!e.geloescht, aktualisiert: e.aktualisiert
+      };
+    },
+    vonServer: function (z) {
+      const d = z.daten || {};
+      return {
+        id: z.id, woche: z.woche, name: d.name || "", menge: d.menge || "",
+        erledigt: !!z.erledigt, geloescht: !!z.geloescht, aktualisiert: z.aktualisiert
+      };
     }
   }
 ];

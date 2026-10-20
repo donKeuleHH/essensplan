@@ -450,3 +450,11 @@ nav button.aktiv { color: var(--auf-akzent); background: var(--akzent); font-wei
 }
 .chip.aktiv { color: var(--auf-akzent); background: var(--akzent); border-color: transparent; }
 .detail-titel + .status { margin: 0 0 4px; }
+
+/* ===== Eigene Artikel auf der Einkaufsliste ===== */
+.extra-form { display: grid; grid-template-columns: 1fr 96px 48px; gap: 8px; margin: 0 0 14px; }
+.extra-form .eingabe { min-width: 0; }
+.extra-plus { width: 48px; padding: 0; font-size: 1.5rem; line-height: 1; }
+.wisch.pille { margin-bottom: 8px; }
+.wisch.pille > .posten { margin-bottom: 0; position: relative; z-index: 1; touch-action: pan-y; }
+.wisch.pille > .wisch-aktion { border-radius: 999px; }
