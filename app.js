@@ -1731,6 +1731,26 @@ function syncEinrichten() {
   return true;
 }
 
+/* ---------- Bildschirmhöhe in der installierten App ---------- */
+
+// Auf manchen iPhones meldet iOS in der installierten App eine zu kleine Seitenhöhe (es fehlt der Bereich der Statusleiste),
+// obwohl die Seite von ganz oben gezeichnet wird. Dann bleibt unten ein leerer Streifen. Wir messen die Lücke und strecken die Seite.
+let seitenLuecke = 0;
+function seitenLueckeMessen() {
+  const installiert = window.navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+  if (!installiert || window.innerHeight <= window.innerWidth) return; // nur Hochformat in der installierten App
+  const luecke = screen.height - window.innerHeight;
+  // Plausible Lücke (höchstens die Statusleiste). Alles darüber ist z. B. die Tastatur: dann den alten Wert behalten.
+  if (luecke >= 0 && luecke <= 100) seitenLuecke = luecke;
+  document.documentElement.style.setProperty("--luecke", seitenLuecke + "px");
+}
+function seitenLueckeEinrichten() {
+  seitenLueckeMessen();
+  setTimeout(seitenLueckeMessen, 300);
+  window.addEventListener("resize", seitenLueckeMessen);
+  window.addEventListener("orientationchange", function () { setTimeout(seitenLueckeMessen, 300); });
+}
+
 /* ---------- Versteckte Diagnose: 5x schnell auf die Versionszeile tippen ---------- */
 
 function diagnoseEinrichten() {
@@ -1767,7 +1787,8 @@ function diagnoseZeigen() {
     "Version-Zeile Unterkante: " + Math.round(kopf.bottom),
     "safe-area oben/unten: " + p.paddingTop + " / " + p.paddingBottom,
     "standalone: " + (window.navigator.standalone === true) + " / " + (window.matchMedia("(display-mode: standalone)").matches),
-    "Pixelverhaeltnis: " + window.devicePixelRatio
+    "Pixelverhaeltnis: " + window.devicePixelRatio,
+    "Seitenluecke (gestreckt um): " + seitenLuecke
   ];
   probe.remove();
   const feld = document.createElement("pre");
@@ -1781,6 +1802,7 @@ function diagnoseZeigen() {
 /* ---------- Start ---------- */
 
 async function start() {
+  seitenLueckeEinrichten();
   navigationEinrichten();
   diagnoseEinrichten();
   try {
