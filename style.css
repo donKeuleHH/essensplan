@@ -275,29 +275,32 @@ textarea.eingabe { min-height: 90px; resize: vertical; }
 footer.version { text-align: center; font-size: 0.72rem; color: var(--text-leise); padding: 0 0 8px; }
 nav {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   margin: 4px 14px calc(env(safe-area-inset-bottom) + 10px);
   padding: 6px;
-  background: var(--bg-tief);
+  background: var(--karte);
+  border: 1px solid var(--linie);
   border-radius: 999px;
-  box-shadow: var(--eingesenkt);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 nav button {
   flex: 1;
   border: 0;
   background: none;
   border-radius: 999px;
-  padding: 8px 4px 7px;
+  padding: 9px 4px 8px;
   font: inherit;
   font-size: 0.72rem;
-  color: var(--text-leise);
+  font-weight: 550;
+  color: var(--text);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  cursor: pointer;
 }
-nav button .symbol { font-size: 1.4rem; line-height: 1; }
-nav button.aktiv { color: var(--auf-akzent); background: var(--akzent); font-weight: 700; box-shadow: 0 4px 12px rgba(245, 183, 60, 0.25); }
+nav button .nav-icon { display: block; }
+nav button.aktiv { color: var(--akzent); background: var(--karte-hell); font-weight: 650; }
 
 /* ===== Wochenplaner ===== */
 .woche-kopf {
