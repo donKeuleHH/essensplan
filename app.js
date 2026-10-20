@@ -457,6 +457,9 @@ function detailOeffnen(id) {
 
   inhalt.push(el("div", { class: "reihe", style: "margin-top: 28px" },
     el("button", { class: "knopf knopf-primaer", type: "button", onclick: function () { formularOeffnen(g); }, text: "Bearbeiten" }),
+    el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { gerichtKopieren(g); }, text: "Kopieren" })
+  ));
+  inhalt.push(el("div", { class: "reihe" },
     el("button", { class: "knopf knopf-gefahr", type: "button", onclick: function () { gerichtLoeschen(g); }, text: "Löschen" })
   ));
 
@@ -465,6 +468,15 @@ function detailOeffnen(id) {
     links: { text: "Schließen", aktion: blattSchliessen },
     inhalt: inhalt
   });
+}
+
+// Öffnet das Formular mit einer Kopie des Gerichts. Gespeichert wird erst, wenn man auf "Speichern" tippt.
+function gerichtKopieren(g) {
+  const kopie = JSON.parse(JSON.stringify(g));
+  delete kopie.id; delete kopie.erstellt; delete kopie.geaendert; delete kopie.aktualisiert;
+  delete kopie.geloescht; delete kopie.version;
+  kopie.titel = g.titel + " (Kopie)";
+  formularOeffnen(kopie);
 }
 
 async function gerichtLoeschen(g) {
@@ -511,7 +523,7 @@ function bildVerkleinern(datei) {
 }
 
 function formularOeffnen(gericht) {
-  const neu = !gericht;
+  const neu = !gericht || !gericht.id;
   const g = gericht || {
     titel: "",
     bild: null,
