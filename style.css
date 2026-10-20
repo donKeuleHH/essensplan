@@ -458,3 +458,4 @@ nav button.aktiv { color: var(--auf-akzent); background: var(--akzent); font-wei
 .wisch.pille { margin-bottom: 8px; }
 .wisch.pille > .posten { margin-bottom: 0; position: relative; z-index: 1; touch-action: pan-y; }
 .wisch.pille > .wisch-aktion { border-radius: 999px; }
+.eigen-marke { margin-left: 8px; padding: 2px 7px; font-size: 0.68rem; font-weight: 650; color: var(--text-leise); background: var(--bg-tief); border-radius: 999px; vertical-align: middle; }

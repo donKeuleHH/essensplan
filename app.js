@@ -988,70 +988,96 @@ function einkaufZeichnen() {
   const ergebnis = einkaufslisteBerechnen(montag);
   const abgehakt = abgehakteFuer(woche);
   const eigene = extrasFuer(woche);
-  const eigeneOffen = eigene.filter(function (e) { return !e.erledigt; });
-  const eigeneErledigt = eigene.filter(function (e) { return e.erledigt; });
-  const offen = ergebnis.posten.filter(function (p) { return !abgehakt.has(p.schluessel); });
-  const erledigt = ergebnis.posten.filter(function (p) { return abgehakt.has(p.schluessel); });
+
+  // Zutaten aus dem Wochenplan und eigene Artikel stehen in einer gemeinsamen Liste.
+  const alle = ergebnis.posten.map(function (p) {
+    return { name: p.name, quelle: "rezept", p: p, erledigt: abgehakt.has(p.schluessel) };
+  }).concat(eigene.map(function (e) {
+    return { name: e.name, quelle: "eigen", e: e, erledigt: !!e.erledigt };
+  })).sort(function (x, y) {
+    return x.name.localeCompare(y.name, "de") || (x.quelle < y.quelle ? -1 : x.quelle > y.quelle ? 1 : 0);
+  });
+  const offen = alle.filter(function (x) { return !x.erledigt; });
+  const erledigt = alle.filter(function (x) { return x.erledigt; });
 
   const hatteFokus = document.activeElement && document.activeElement.id === "extra-name";
   const teile = wochenKopf();
-  const eingabeZeile = extraEingabe(woche);
-  teile.push(eingabeZeile);
+  teile.push(extraEingabe(woche));
 
-  const knoepfe = [];
-  if (offen.length > 0 || eigeneOffen.length > 0) {
-    knoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { einkaufTeilen(montag, offen, eigeneOffen); }, text: "Liste teilen" }));
-  }
-  if (erledigt.length > 0 || eigeneErledigt.length > 0) {
-    knoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { hakenZuruecksetzen(montag); }, text: "Haken entfernen" }));
+  function zeile(x) {
+    return x.quelle === "rezept" ? postenZeile(x.p, x.erledigt, montag) : extraZeile(x.e);
   }
 
-  if (eigene.length > 0) {
-    teile.push(el("h3", { class: "abschnitt", text: "Eigene Artikel" }));
-    teile.push(el("div", { class: "posten-liste" },
-      eigeneOffen.concat(eigeneErledigt).map(function (e) { return extraZeile(e); })));
-  }
-
-  if (ergebnis.anzahlGerichte === 0) {
-    if (eigene.length === 0) {
-      teile.push(el("div", { class: "karte leer" },
-        el("div", { class: "leer-symbol", text: "🛒" }),
-        el("h2", { text: "Noch nichts zu kaufen" }),
-        el("p", { text: "Für diese Woche ist noch kein Gericht geplant. Wähle sie im Reiter „Wochenplan“ aus oder füge oben einen eigenen Artikel hinzu." })
-      ));
-    }
-  } else if (ergebnis.posten.length === 0) {
+  if (ergebnis.anzahlGerichte === 0 && eigene.length === 0) {
+    teile.push(el("div", { class: "karte leer" },
+      el("div", { class: "leer-symbol", text: "🛒" }),
+      el("h2", { text: "Noch nichts zu kaufen" }),
+      el("p", { text: "Für diese Woche ist noch kein Gericht geplant. Wähle sie im Reiter „Wochenplan“ aus oder füge oben einen eigenen Artikel hinzu." })
+    ));
+  } else if (alle.length === 0) {
     teile.push(el("div", { class: "karte" },
       el("p", { text: "Die geplanten Gerichte haben keine Zutaten eingetragen." })
     ));
   } else {
-    if (eigene.length > 0) teile.push(el("h3", { class: "abschnitt", text: "Aus dem Wochenplan" }));
+    const quellen = [];
+    if (ergebnis.anzahlGerichte > 0) {
+      quellen.push("Aus " + ergebnis.anzahlGerichte + (ergebnis.anzahlGerichte === 1 ? " geplantem Gericht" : " geplanten Gerichten"));
+    }
+    if (eigene.length > 0) quellen.push(eigene.length + (eigene.length === 1 ? " eigener Artikel" : " eigene Artikel"));
     teile.push(el("p", {
       class: "leise einkauf-info",
-      text: "Aus " + ergebnis.anzahlGerichte + (ergebnis.anzahlGerichte === 1 ? " geplantem Gericht" : " geplanten Gerichten") +
-        " · " + erledigt.length + " von " + ergebnis.posten.length + " erledigt"
+      text: quellen.join(" + ") + " · " + erledigt.length + " von " + alle.length + " erledigt"
     }));
+
+    const knoepfe = [];
+    if (offen.length > 0) {
+      knoepfe.push(el("button", {
+        class: "knopf knopf-sekundaer", type: "button", text: "Liste teilen",
+        onclick: function () {
+          einkaufTeilen(montag,
+            offen.filter(function (x) { return x.quelle === "rezept"; }).map(function (x) { return x.p; }),
+            offen.filter(function (x) { return x.quelle === "eigen"; }).map(function (x) { return x.e; }));
+        }
+      }));
+    }
+    if (erledigt.length > 0) {
+      knoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { hakenZuruecksetzen(montag); }, text: "Haken entfernen" }));
+    }
     if (knoepfe.length > 0) teile.push(el("div", { class: "reihe" }, knoepfe));
 
     if (offen.length > 0) {
-      teile.push(el("div", { class: "posten-liste" }, offen.map(function (p) { return postenZeile(p, false, montag); })));
+      teile.push(el("div", { class: "posten-liste" }, offen.map(zeile)));
     } else {
       teile.push(el("p", { class: "leise", text: "Alles erledigt." }));
     }
     if (erledigt.length > 0) {
       teile.push(el("h3", { class: "abschnitt", text: "Erledigt" }));
-      teile.push(el("div", { class: "posten-liste" }, erledigt.map(function (p) { return postenZeile(p, true, montag); })));
+      teile.push(el("div", { class: "posten-liste" }, erledigt.map(zeile)));
     }
-  }
-  // Gibt es keine Wochenplan-Posten, stehen die Knöpfe direkt unter dem Eingabefeld.
-  if (knoepfe.length > 0 && (ergebnis.anzahlGerichte === 0 || ergebnis.posten.length === 0)) {
-    teile.splice(teile.indexOf(eingabeZeile) + 1, 0, el("div", { class: "reihe" }, knoepfe));
   }
   box.replaceChildren.apply(box, teile);
   if (hatteFokus) {
     const feld = document.getElementById("extra-name");
     if (feld) { feld.focus(); try { feld.setSelectionRange(feld.value.length, feld.value.length); } catch (x) { /* egal */ } }
   }
+}
+
+// "2", "2 x", "2 Tuben", "1,5 l" -> { zahl, einheit }; Text ohne führende Zahl -> null
+function extraMengeLesen(text) {
+  const m = /^\s*(\d+(?:[.,]\d+)?)\s*(?:[x×](?=\s|$))?\s*(.*?)\s*$/i.exec(text || "");
+  return m ? { zahl: Number(m[1].replace(",", ".")), einheit: m[2] } : null;
+}
+
+// Zählt zwei Mengenangaben zusammen, wenn sie dieselbe Einheit haben (1 + 2 = 3, 1 Dose + 2 Dose = 3 Dose).
+// Passen sie nicht zusammen, werden beide untereinander aufgeführt ("1 Packung + 500 g").
+function extraMengenSummieren(alt, neu) {
+  if (!neu.trim()) return alt;
+  if (!alt.trim()) return neu;
+  const a = extraMengeLesen(alt), n = extraMengeLesen(neu);
+  if (a && n && a.einheit.toLowerCase() === n.einheit.toLowerCase()) {
+    return zahlText(a.zahl + n.zahl) + (a.einheit ? " " + a.einheit : "");
+  }
+  return alt + " + " + neu;
 }
 
 // Eingabezeile für eigene Artikel (Name, optionale Menge) mit Vorschlägen aus früheren Einträgen.
@@ -1066,12 +1092,6 @@ function extraEingabe(woche) {
   });
   name.addEventListener("input", function () { extraEntwurf.name = name.value; });
   menge.addEventListener("input", function () { extraEntwurf.menge = menge.value; });
-  // Wählt man einen früheren Artikel aus, wird seine letzte Menge gleich mit eingetragen.
-  name.addEventListener("change", function () {
-    if (menge.value.trim() !== "") return;
-    const bekannt = extraVorschlaege().get(name.value.trim().toLowerCase());
-    if (bekannt && bekannt.menge) { menge.value = bekannt.menge; extraEntwurf.menge = bekannt.menge; }
-  });
   return el("form", {
     class: "extra-form",
     onsubmit: function (e) { e.preventDefault(); extraHinzufuegen(woche, name.value, menge.value); }
@@ -1088,7 +1108,7 @@ function extraZeile(e) {
     onclick: function () { extraUmschalten(e.id); }
   },
     el("span", { class: "haken", text: e.erledigt ? "✓" : "" }),
-    el("span", { class: "posten-name", text: e.name }),
+    el("span", { class: "posten-name" }, e.name, el("span", { class: "eigen-marke", text: "eigen" })),
     el("span", { class: "posten-menge", text: e.menge || "" })
   );
   return wischZeile(zeile, "Löschen", function () { extraLoeschen(e.id); }, "pille");
@@ -1112,13 +1132,15 @@ async function extraHinzufuegen(woche, nameText, mengeText2) {
   if (name === "") return;
   const menge = mengeText2.trim();
   extraEntwurf = { name: "", menge: "" };
-  // Gibt es den Artikel in dieser Woche schon, wird er nur wieder auf "offen" gesetzt.
+  // Gibt es den Artikel in dieser Woche schon, wird nichts doppelt angelegt.
   const vorhanden = Array.from(extras.values()).find(function (e) {
     return e.woche === woche && !e.geloescht && e.name.toLowerCase() === name.toLowerCase();
   });
   if (vorhanden) {
+    // Noch offen: Mengen zusammenzählen. Schon abgehakt (also gekauft): neu auf die Liste, mit der neuen Menge.
+    const neueMenge = vorhanden.erledigt ? (menge || vorhanden.menge) : extraMengenSummieren(vorhanden.menge || "", menge);
     await extraSpeichern([Object.assign({}, vorhanden, {
-      erledigt: false, menge: menge || vorhanden.menge, aktualisiert: zeitNach(vorhanden), dirty: 1
+      erledigt: false, menge: neueMenge, aktualisiert: zeitNach(vorhanden), dirty: 1
     })]);
     return;
   }
