@@ -432,3 +432,21 @@ nav button.aktiv { color: var(--auf-akzent); background: var(--akzent); font-wei
 .schritt-text { min-width: 120px; text-align: center; font-weight: 650; }
 .schritt-hinweis { margin: 8px 0 0; font-size: 0.8rem; }
 .schritt-hinweis[hidden] { display: none; }
+
+/* ===== Filter-Chips (Kohlenhydrate) ===== */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 14px; padding: 2px; }
+.chip {
+  flex: none;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 8px 11px;
+  color: var(--text-leise);
+  background: var(--karte);
+  border: 1px solid var(--linie);
+  border-radius: 999px;
+  box-shadow: var(--erhaben);
+  cursor: pointer;
+}
+.chip.aktiv { color: var(--auf-akzent); background: var(--akzent); border-color: transparent; }
+.detail-titel + .status { margin: 0 0 4px; }

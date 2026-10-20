@@ -180,6 +180,26 @@ function zahlText(n) {
 
 function pluralPortionen(n) { return n === 1 ? "Portion" : "Portionen"; }
 
+// Kohlenhydrat-Stufe eines Gerichts: "" (keine Angabe), "arm" oder "reich"
+const KH_TEXT = { arm: "kohlenhydratarm", reich: "kohlenhydratreich" };
+
+// Auswahlleiste zum Filtern. aktuell: "" (alle), "arm" oder "reich".
+function khChips(aktuell, beiWahl) {
+  const stufen = [["", "Alle"], ["arm", "Kohlenhydratarm"], ["reich", "Kohlenhydratreich"]];
+  const leiste = el("div", { class: "chips" });
+  function zeichnen(wahl) {
+    leiste.replaceChildren.apply(leiste, stufen.map(function (st) {
+      return el("button", {
+        class: "chip" + (st[0] === wahl ? " aktiv" : ""), type: "button", text: st[1],
+        onclick: function () { zeichnen(st[0]); beiWahl(st[0]); }
+      });
+    }));
+  }
+  zeichnen(aktuell);
+  return leiste;
+}
+let khFilterListe = "";
+
 /* ---------- Zustand ---------- */
 
 let gerichteRoh = new Map(); // alle Gerichte inkl. gelöschter (der Löschmarker wird mit abgeglichen)
@@ -313,7 +333,12 @@ function listeZeichnen() {
       el("p", { text: "Lege dein erstes Gericht an: mit Foto, Zutaten und Nährwerten." })
     ));
   } else {
-    sortiert.forEach(function (g) {
+    teile.push(khChips(khFilterListe, function (w) { khFilterListe = w; listeZeichnen(); }));
+    const sichtbar = sortiert.filter(function (g) { return !khFilterListe || g.khStufe === khFilterListe; });
+    if (sichtbar.length === 0) {
+      teile.push(el("p", { class: "leise", text: "Kein Gericht mit dieser Angabe. Die Stufe stellst du beim Bearbeiten eines Gerichts ein." }));
+    }
+    sichtbar.forEach(function (g) {
       teile.push(wischZeile(gerichtKarte(g), "Löschen", function () { gerichtLoeschen(g); }));
     });
   }
@@ -338,6 +363,7 @@ function gerichtKarte(g, beiKlick) {
     meta.push(zahlText(g.naehrwerte.kcal) + " kcal");
   }
   meta.push(g.zutaten.length + (g.zutaten.length === 1 ? " Zutat" : " Zutaten"));
+  if (KH_TEXT[g.khStufe]) meta.push(KH_TEXT[g.khStufe]);
 
   return el("button", { class: "gericht-karte", type: "button", onclick: beiKlick || function () { detailOeffnen(g.id); } },
     bild,
@@ -396,6 +422,7 @@ function detailOeffnen(id) {
   const inhalt = [
     g.bild ? el("img", { class: "detail-bild", src: g.bild, alt: g.titel }) : null,
     el("h1", { class: "detail-titel", text: g.titel }),
+    KH_TEXT[g.khStufe] ? el("span", { class: "status", text: KH_TEXT[g.khStufe] }) : null,
     portionenSchalter
   ];
 
@@ -509,6 +536,13 @@ function formularOeffnen(gericht) {
   const portionenFeld = el("input", {
     type: "text", class: "eingabe", inputmode: "numeric", autocomplete: "off", value: zahlText(g.portionen)
   });
+
+  const khStufeFeld = el("select", { class: "eingabe" },
+    el("option", { value: "", text: "Keine Angabe" }),
+    el("option", { value: "arm", text: "Kohlenhydratarm" }),
+    el("option", { value: "reich", text: "Kohlenhydratreich" })
+  );
+  khStufeFeld.value = g.khStufe === "arm" || g.khStufe === "reich" ? g.khStufe : "";
 
   // Ändert man die Portionen, rechnen sich alle Mengen proportional um.
   let letztePortionen = zahlLesen(portionenFeld.value);
@@ -653,6 +687,7 @@ function formularOeffnen(gericht) {
       portionen: portionen,
       zutaten: zutaten,
       naehrwerte: werte,
+      khStufe: khStufeFeld.value,
       notizen: notizenFeld.value.trim(),
       erstellt: g.erstellt || jetzt,
       geaendert: jetzt,
@@ -681,6 +716,7 @@ function formularOeffnen(gericht) {
       el("label", { class: "feld" }, el("span", { text: "Titel" }), titelFeld),
       el("div", { class: "feld" }, el("span", { text: "Foto (optional)" }), bildBereich, dateiFeld),
       el("label", { class: "feld" }, el("span", { text: "Anzahl Portionen (Mengen rechnen sich automatisch um)" }), portionenFeld),
+      el("label", { class: "feld" }, el("span", { text: "Kohlenhydrate (für den Filter bei Sport- und Ruhetagen)" }), khStufeFeld),
       el("h3", { class: "abschnitt", text: "Zutaten" }),
       zutatenListe,
       zutatHinzufuegen,
@@ -772,6 +808,7 @@ function kurzInfo(g) {
   if (g.naehrwerte && g.naehrwerte.kcal !== null && g.naehrwerte.kcal !== undefined) {
     teile.push(zahlText(g.naehrwerte.kcal) + " kcal");
   }
+  if (KH_TEXT[g.khStufe]) teile.push(KH_TEXT[g.khStufe]);
   return teile.join(" · ");
 }
 
@@ -826,11 +863,13 @@ function gerichtWaehlen(index, aktuelleId) {
     type: "search", class: "eingabe", autocomplete: "off", autocapitalize: "off", placeholder: "Gericht suchen …"
   });
   const liste = el("div", { style: "margin-top: 14px" });
+  let khAuswahl = "";
+  const chips = khChips("", function (w) { khAuswahl = w; listeZeichnen2(); });
 
   function listeZeichnen2() {
     const q = suche.value.trim().toLowerCase();
     const treffer = gerichte
-      .filter(function (g) { return g.titel.toLowerCase().indexOf(q) >= 0; })
+      .filter(function (g) { return g.titel.toLowerCase().indexOf(q) >= 0 && (!khAuswahl || g.khStufe === khAuswahl); })
       .sort(function (a, b) { return a.titel.localeCompare(b.titel, "de"); });
     if (gerichte.length === 0) {
       liste.replaceChildren(el("div", { class: "karte" },
@@ -851,6 +890,7 @@ function gerichtWaehlen(index, aktuelleId) {
     links: { text: "Abbrechen", aktion: blattSchliessen },
     inhalt: [
       gerichte.length > 0 ? suche : null,
+      gerichte.length > 0 ? chips : null,
       liste,
       aktuelleId !== null && aktuelleId !== undefined
         ? el("button", {
@@ -1132,7 +1172,7 @@ const SYNC_TABELLEN = [
         id: g.id,
         daten: {
           titel: g.titel, portionen: g.portionen, zutaten: g.zutaten, naehrwerte: g.naehrwerte,
-          notizen: g.notizen, erstellt: g.erstellt, geaendert: g.geaendert
+          notizen: g.notizen, erstellt: g.erstellt, geaendert: g.geaendert, khStufe: g.khStufe || ""
         },
         bild: g.bild || null,
         geloescht: !!g.geloescht,
@@ -1143,7 +1183,7 @@ const SYNC_TABELLEN = [
       const d = z.daten || {};
       return {
         id: z.id, titel: d.titel || "", bild: z.bild || null, portionen: d.portionen || 1,
-        zutaten: d.zutaten || [], naehrwerte: d.naehrwerte || {}, notizen: d.notizen || "",
+        zutaten: d.zutaten || [], naehrwerte: d.naehrwerte || {}, notizen: d.notizen || "", khStufe: d.khStufe || "",
         erstellt: d.erstellt || z.aktualisiert, geaendert: d.geaendert || z.aktualisiert,
         geloescht: !!z.geloescht, aktualisiert: z.aktualisiert
       };
