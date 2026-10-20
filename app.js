@@ -1731,80 +1731,10 @@ function syncEinrichten() {
   return true;
 }
 
-/* ---------- Bildschirmhöhe in der installierten App ---------- */
-
-// Auf manchen iPhones meldet iOS in der installierten App eine zu kleine Seitenhöhe (es fehlt der Bereich der Statusleiste),
-// obwohl die Seite von ganz oben gezeichnet wird. Dann bleibt unten ein leerer Streifen. Wir messen die Lücke und strecken die Seite.
-let seitenLuecke = 0;
-function seitenLueckeMessen() {
-  const installiert = window.navigator.standalone === true || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
-  if (!installiert || window.innerHeight <= window.innerWidth) return; // nur Hochformat in der installierten App
-  const luecke = screen.height - window.innerHeight;
-  // Plausible Lücke (höchstens die Statusleiste). Alles darüber ist z. B. die Tastatur: dann den alten Wert behalten.
-  if (luecke >= 0 && luecke <= 100) seitenLuecke = luecke;
-  document.documentElement.style.setProperty("--luecke", seitenLuecke + "px");
-}
-function seitenLueckeEinrichten() {
-  seitenLueckeMessen();
-  setTimeout(seitenLueckeMessen, 300);
-  window.addEventListener("resize", seitenLueckeMessen);
-  window.addEventListener("orientationchange", function () { setTimeout(seitenLueckeMessen, 300); });
-}
-
-/* ---------- Versteckte Diagnose: 5x schnell auf die Versionszeile tippen ---------- */
-
-function diagnoseEinrichten() {
-  const zeile = document.querySelector("footer.version");
-  if (!zeile) return;
-  let tipps = [];
-  zeile.addEventListener("click", function () {
-    const jetzt = Date.now();
-    tipps = tipps.filter(function (t) { return jetzt - t < 3000; }).concat(jetzt);
-    if (tipps.length < 5) return;
-    tipps = [];
-    diagnoseZeigen();
-  });
-}
-
-function diagnoseZeigen() {
-  const alt = document.getElementById("diagnose");
-  if (alt) { alt.remove(); return; }
-  const probe = document.createElement("div");
-  probe.style.cssText = "position:fixed;left:0;top:0;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)";
-  document.body.append(probe);
-  const p = getComputedStyle(probe);
-  const nav = document.querySelector("nav").getBoundingClientRect();
-  const kopf = document.querySelector("footer.version").getBoundingClientRect();
-  const vv = window.visualViewport;
-  const zeilen = [
-    "innerHeight: " + window.innerHeight,
-    "visualViewport.height: " + (vv ? Math.round(vv.height) : "-"),
-    "screen.height: " + screen.height + " (avail " + screen.availHeight + ")",
-    "documentElement.clientHeight: " + document.documentElement.clientHeight,
-    "body Unterkante: " + Math.round(document.body.getBoundingClientRect().bottom),
-    "nav Unterkante: " + Math.round(nav.bottom) + " / Hoehe " + Math.round(nav.height),
-    "Luft unter nav: " + Math.round(window.innerHeight - nav.bottom),
-    "Version-Zeile Unterkante: " + Math.round(kopf.bottom),
-    "safe-area oben/unten: " + p.paddingTop + " / " + p.paddingBottom,
-    "standalone: " + (window.navigator.standalone === true) + " / " + (window.matchMedia("(display-mode: standalone)").matches),
-    "Pixelverhaeltnis: " + window.devicePixelRatio,
-    "Seitenluecke (gestreckt um): " + seitenLuecke
-  ];
-  probe.remove();
-  const feld = document.createElement("pre");
-  feld.id = "diagnose";
-  feld.textContent = zeilen.join("\n") + "\n\n(Tippen zum Schliessen)";
-  feld.style.cssText = "position:fixed;left:12px;right:12px;top:90px;z-index:99;margin:0;padding:14px;font:12px/1.5 ui-monospace,monospace;color:#fff;background:rgba(0,0,0,0.88);border:1px solid #f5b73c;border-radius:12px;white-space:pre-wrap";
-  feld.addEventListener("click", function () { feld.remove(); });
-  document.body.append(feld);
-}
-
 /* ---------- Start ---------- */
 
 async function start() {
-  seitenLueckeEinrichten();
   navigationEinrichten();
-  diagnoseEinrichten();
   try {
     db = await datenbankOeffnen();
     await datenMigrieren();
