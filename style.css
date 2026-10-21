@@ -622,3 +622,6 @@ nav button.aktiv { color: var(--akzent); background: var(--karte-hell); font-wei
 .kachel-diaet { display: flex; flex: none; color: var(--akzent); }
 .kachel-diaet svg { width: 20px; height: 20px; }
 .fab { margin-top: 14px; }
+
+/* Wochen-Wischen: senkrecht scrollt der Browser, waagerecht gehört der App */
+main { touch-action: pan-y; }

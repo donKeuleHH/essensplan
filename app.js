@@ -908,6 +908,78 @@ function wocheWechseln(richtung) {
   wochenAnsichtenZeichnen();
 }
 
+/* ---------- Wischen von Woche zu Woche ----------
+   Nach links wischen = nächste Woche, nach rechts = vorige. Es gilt nur auf dem Wochenkopf und der freien Fläche;
+   auf den Tageskarten und Einkaufsposten bleibt das Wischen zum Entfernen unberührt. */
+
+function wochenWischenEinrichten() {
+  const haupt = document.querySelector("main");
+  const geschuetzt = ".tag, .wisch, .posten-liste, .vorschlag-liste, .extra-form, input, select, textarea";
+  let start = null, waagerecht = false, behaelter = null, dx = 0;
+
+  function aktiv() { return document.querySelector(".ansicht.aktiv"); }
+  function imWochenBereich() { const a = aktiv(); return a && (a.id === "wochenplan" || a.id === "einkauf") ? a : null; }
+
+  haupt.addEventListener("pointerdown", function (e) {
+    start = null; waagerecht = false; dx = 0;
+    behaelter = imWochenBereich();
+    if (!behaelter || !e.isPrimary) return;
+    if (e.target.closest(geschuetzt)) return;
+    // Knöpfe nur im Wochenkopf zulassen (die Pfeile), sonst würde ein Tipp auf einen Knopf als Wischen zählen.
+    if (e.target.closest("button") && !e.target.closest(".woche-kopf")) return;
+    start = { x: e.clientX, y: e.clientY };
+  });
+
+  haupt.addEventListener("pointermove", function (e) {
+    if (!start || !behaelter) return;
+    const x = e.clientX - start.x, y = e.clientY - start.y;
+    if (!waagerecht) {
+      if (Math.abs(y) > 12 && Math.abs(y) > Math.abs(x)) { start = null; return; }
+      if (Math.abs(x) > 12 && Math.abs(x) > Math.abs(y) * 1.5) waagerecht = true; else return;
+    }
+    dx = x;
+    behaelter.style.transition = "none";
+    behaelter.style.transform = "translateX(" + Math.round(dx * 0.35) + "px)";
+    behaelter.style.opacity = String(Math.max(0.4, 1 - Math.abs(dx) / 420));
+  });
+
+  function loslassen() {
+    if (!start || !behaelter) { start = null; return; }
+    const b = behaelter;
+    const war = waagerecht, weite = dx;
+    start = null; waagerecht = false;
+    if (!war) return;
+    wischGerade = true;
+    setTimeout(function () { wischGerade = false; }, 60);
+    const richtung = weite < 0 ? 1 : -1;
+    const kurz = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (Math.abs(weite) < 70) {
+      b.style.transition = "transform .15s, opacity .15s"; b.style.transform = ""; b.style.opacity = "";
+      return;
+    }
+    if (kurz) { b.style.transition = ""; b.style.transform = ""; b.style.opacity = ""; wocheWechseln(richtung); return; }
+    b.style.transition = "transform .14s ease-in, opacity .14s ease-in";
+    b.style.transform = "translateX(" + (-richtung * 60) + "px)";
+    b.style.opacity = "0";
+    setTimeout(function () {
+      wocheWechseln(richtung);
+      b.style.transition = "none";
+      b.style.transform = "translateX(" + (richtung * 60) + "px)";
+      b.style.opacity = "0";
+      void b.offsetWidth;
+      b.style.transition = "transform .18s ease-out, opacity .18s ease-out";
+      b.style.transform = ""; b.style.opacity = "";
+    }, 140);
+  }
+  haupt.addEventListener("pointerup", loslassen);
+  haupt.addEventListener("pointercancel", loslassen);
+  // Nach einem Wisch soll der Knopf, auf dem der Finger endet, nicht zusätzlich auslösen.
+  haupt.addEventListener("click", function (e) {
+    if (wischGerade) { wischGerade = false; e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+}
+let wischGerade = false;
+
 // Wochenplan und Einkaufsliste zeigen immer dieselbe Woche.
 function wochenAnsichtenZeichnen() {
   wochenplanZeichnen();
@@ -1956,6 +2028,7 @@ function einstellungenOeffnen() {
 }
 
 async function start() {
+  wochenWischenEinrichten();
   document.getElementById("einstellungen-knopf").addEventListener("click", einstellungenOeffnen);
   navigationEinrichten();
   try {
