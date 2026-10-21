@@ -1955,34 +1955,7 @@ function einstellungenOeffnen() {
   });
 }
 
-/* ---------- Höhen-Messung (vorübergehend, zum Testen der Navigation) ----------
-   Zeigt im Footer die aktuelle Höhe an und aktualisiert sie bei jeder Geste und Größenänderung. */
-
-function hoehenMessungEinrichten() {
-  const fuss = document.querySelector("footer.version");
-  if (!fuss) return;
-  const grund = fuss.textContent.split(" · Höhe")[0];
-  let zaehler = 0;
-  function zeigen(anlass) {
-    const vv = window.visualViewport;
-    zaehler++;
-    fuss.textContent = grund + " · i" + window.innerHeight + " c" + document.documentElement.clientHeight +
-      (vv ? " v" + Math.round(vv.height) + " o" + Math.round(vv.offsetTop) : "") +
-      " s" + Math.round(window.scrollY) + " (" + anlass + " " + zaehler + ")";
-  }
-  zeigen("start");
-  ["resize", "scroll", "orientationchange"].forEach(function (n) { window.addEventListener(n, function () { zeigen(n); }); });
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", function () { zeigen("vvresize"); });
-    window.visualViewport.addEventListener("scroll", function () { zeigen("vvscroll"); });
-  }
-  ["touchstart", "touchmove", "touchend"].forEach(function (n) {
-    document.addEventListener(n, function () { zeigen(n); }, { passive: true });
-  });
-}
-
 async function start() {
-  hoehenMessungEinrichten();
   document.getElementById("einstellungen-knopf").addEventListener("click", einstellungenOeffnen);
   navigationEinrichten();
   try {
