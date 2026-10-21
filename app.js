@@ -204,6 +204,32 @@ function khChips(aktuell, beiWahl) {
 }
 let khFilterListe = "";
 
+// Ernährungsform eines Gerichts: "" (keine Angabe), "vegetarisch" oder "vegan".
+// Vegane Gerichte sind auch vegetarisch und erscheinen deshalb im Filter "Vegetarisch" mit.
+const ERN_TEXT = { vegetarisch: "vegetarisch", vegan: "vegan" };
+let ernFilterListe = "";
+
+function ernaehrungPasst(g, filter) {
+  if (!filter) return true;
+  if (filter === "vegan") return g.ernaehrung === "vegan";
+  return g.ernaehrung === "vegetarisch" || g.ernaehrung === "vegan";
+}
+
+function ernChips(aktuell, beiWahl) {
+  const stufen = [["", "Alle"], ["vegetarisch", "Vegetarisch"], ["vegan", "Vegan"]];
+  const leiste = el("div", { class: "chips" });
+  function zeichnen(wahl) {
+    leiste.replaceChildren.apply(leiste, stufen.map(function (st) {
+      return el("button", {
+        class: "chip" + (st[0] === wahl ? " aktiv" : ""), type: "button", text: st[1],
+        onclick: function () { zeichnen(st[0]); beiWahl(st[0]); }
+      });
+    }));
+  }
+  zeichnen(aktuell);
+  return leiste;
+}
+
 /* ---------- Zustand ---------- */
 
 let gerichteRoh = new Map(); // alle Gerichte inkl. gelöschter (der Löschmarker wird mit abgeglichen)
@@ -340,9 +366,12 @@ function listeZeichnen() {
     ));
   } else {
     teile.push(khChips(khFilterListe, function (w) { khFilterListe = w; listeZeichnen(); }));
-    const sichtbar = sortiert.filter(function (g) { return !khFilterListe || g.khStufe === khFilterListe; });
+    teile.push(ernChips(ernFilterListe, function (w) { ernFilterListe = w; listeZeichnen(); }));
+    const sichtbar = sortiert.filter(function (g) {
+      return (!khFilterListe || g.khStufe === khFilterListe) && ernaehrungPasst(g, ernFilterListe);
+    });
     if (sichtbar.length === 0) {
-      teile.push(el("p", { class: "leise", text: "Kein Gericht mit dieser Angabe. Die Stufe stellst du beim Bearbeiten eines Gerichts ein." }));
+      teile.push(el("p", { class: "leise", text: "Kein Gericht mit dieser Angabe. Kohlenhydrate und Ernährung stellst du beim Bearbeiten eines Gerichts ein." }));
     }
     sichtbar.forEach(function (g) {
       teile.push(wischZeile(gerichtKarte(g), "Löschen", function () { gerichtLoeschen(g); }));
@@ -370,6 +399,7 @@ function gerichtKarte(g, beiKlick) {
   }
   meta.push(g.zutaten.length + (g.zutaten.length === 1 ? " Zutat" : " Zutaten"));
   if (KH_TEXT[g.khStufe]) meta.push(KH_TEXT[g.khStufe]);
+  if (ERN_TEXT[g.ernaehrung]) meta.push(ERN_TEXT[g.ernaehrung]);
 
   return el("button", { class: "gericht-karte", type: "button", onclick: beiKlick || function () { detailOeffnen(g.id); } },
     bild,
@@ -428,7 +458,10 @@ function detailOeffnen(id) {
   const inhalt = [
     g.bild ? el("img", { class: "detail-bild", src: g.bild, alt: g.titel }) : null,
     el("h1", { class: "detail-titel", text: g.titel }),
-    KH_TEXT[g.khStufe] ? el("span", { class: "status", text: KH_TEXT[g.khStufe] }) : null,
+    (KH_TEXT[g.khStufe] || ERN_TEXT[g.ernaehrung]) ? el("div", { class: "chips-detail" },
+      KH_TEXT[g.khStufe] ? el("span", { class: "status", text: KH_TEXT[g.khStufe] }) : null,
+      ERN_TEXT[g.ernaehrung] ? el("span", { class: "status", text: ERN_TEXT[g.ernaehrung] }) : null
+    ) : null,
     portionenSchalter
   ];
 
@@ -561,6 +594,13 @@ function formularOeffnen(gericht) {
     el("option", { value: "reich", text: "Kohlenhydratreich" })
   );
   khStufeFeld.value = g.khStufe === "arm" || g.khStufe === "reich" ? g.khStufe : "";
+
+  const ernaehrungFeld = el("select", { class: "eingabe" },
+    el("option", { value: "", text: "Keine Angabe" }),
+    el("option", { value: "vegetarisch", text: "Vegetarisch" }),
+    el("option", { value: "vegan", text: "Vegan" })
+  );
+  ernaehrungFeld.value = g.ernaehrung === "vegetarisch" || g.ernaehrung === "vegan" ? g.ernaehrung : "";
 
   // Ändert man die Portionen, rechnen sich alle Mengen proportional um.
   let letztePortionen = zahlLesen(portionenFeld.value);
@@ -706,6 +746,7 @@ function formularOeffnen(gericht) {
       zutaten: zutaten,
       naehrwerte: werte,
       khStufe: khStufeFeld.value,
+      ernaehrung: ernaehrungFeld.value,
       notizen: notizenFeld.value.trim(),
       erstellt: g.erstellt || jetzt,
       geaendert: jetzt,
@@ -735,6 +776,7 @@ function formularOeffnen(gericht) {
       el("div", { class: "feld" }, el("span", { text: "Foto (optional)" }), bildBereich, dateiFeld),
       el("label", { class: "feld" }, el("span", { text: "Anzahl Portionen (Mengen rechnen sich automatisch um)" }), portionenFeld),
       el("label", { class: "feld" }, el("span", { text: "Kohlenhydrate (für den Filter bei Sport- und Ruhetagen)" }), khStufeFeld),
+      el("label", { class: "feld" }, el("span", { text: "Ernährung (für den Filter nach vegetarisch oder vegan)" }), ernaehrungFeld),
       el("h3", { class: "abschnitt", text: "Zutaten" }),
       zutatenListe,
       zutatHinzufuegen,
@@ -827,6 +869,7 @@ function kurzInfo(g) {
     teile.push(zahlText(g.naehrwerte.kcal) + " kcal");
   }
   if (KH_TEXT[g.khStufe]) teile.push(KH_TEXT[g.khStufe]);
+  if (ERN_TEXT[g.ernaehrung]) teile.push(ERN_TEXT[g.ernaehrung]);
   return teile.join(" · ");
 }
 
@@ -889,12 +932,16 @@ function gerichtWaehlen(index, aktuelleId) {
   });
   const liste = el("div", { style: "margin-top: 14px" });
   let khAuswahl = "";
-  const chips = khChips("", function (w) { khAuswahl = w; listeZeichnen2(); });
+  let ernAuswahl = "";
+  const chips = el("div", {},
+    khChips("", function (w) { khAuswahl = w; listeZeichnen2(); }),
+    ernChips("", function (w) { ernAuswahl = w; listeZeichnen2(); })
+  );
 
   function listeZeichnen2() {
     const q = suche.value.trim().toLowerCase();
     const treffer = gerichte
-      .filter(function (g) { return g.titel.toLowerCase().indexOf(q) >= 0 && (!khAuswahl || g.khStufe === khAuswahl); })
+      .filter(function (g) { return g.titel.toLowerCase().indexOf(q) >= 0 && (!khAuswahl || g.khStufe === khAuswahl) && ernaehrungPasst(g, ernAuswahl); })
       .sort(function (a, b) { return a.titel.localeCompare(b.titel, "de"); });
     if (gerichte.length === 0) {
       liste.replaceChildren(el("div", { class: "karte" },
@@ -1506,7 +1553,7 @@ const SYNC_TABELLEN = [
         id: g.id,
         daten: {
           titel: g.titel, portionen: g.portionen, zutaten: g.zutaten, naehrwerte: g.naehrwerte,
-          notizen: g.notizen, erstellt: g.erstellt, geaendert: g.geaendert, khStufe: g.khStufe || ""
+          notizen: g.notizen, erstellt: g.erstellt, geaendert: g.geaendert, khStufe: g.khStufe || "", ernaehrung: g.ernaehrung || ""
         },
         bild: g.bild || null,
         geloescht: !!g.geloescht,
@@ -1517,7 +1564,7 @@ const SYNC_TABELLEN = [
       const d = z.daten || {};
       return {
         id: z.id, titel: d.titel || "", bild: z.bild || null, portionen: d.portionen || 1,
-        zutaten: d.zutaten || [], naehrwerte: d.naehrwerte || {}, notizen: d.notizen || "", khStufe: d.khStufe || "",
+        zutaten: d.zutaten || [], naehrwerte: d.naehrwerte || {}, notizen: d.notizen || "", khStufe: d.khStufe || "", ernaehrung: d.ernaehrung || "",
         erstellt: d.erstellt || z.aktualisiert, geaendert: d.geaendert || z.aktualisiert,
         geloescht: !!z.geloescht, aktualisiert: z.aktualisiert
       };

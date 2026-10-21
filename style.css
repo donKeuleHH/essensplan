@@ -590,3 +590,6 @@ nav button.aktiv { color: var(--akzent); background: var(--karte-hell); font-wei
   --sport: #bdddfc; --auf-sport: #1c2f40;
   --knopf-glow: rgba(136, 189, 242, 0.28);
 }
+
+.chips-detail { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips + .chips { margin-top: -4px; }
