@@ -1955,35 +1955,34 @@ function einstellungenOeffnen() {
   });
 }
 
-/* ---------- Höhe der installierten App auffrischen ----------
-   Auf dem iPhone startet die installierte App mit einer zu kurzen Seitenhöhe, die erst nach einer Wischgeste
-   neu berechnet wird. Hier wird dieses Neuberechnen beim Start selbst angestoßen. */
+/* ---------- Höhen-Messung (vorübergehend, zum Testen der Navigation) ----------
+   Zeigt im Footer die aktuelle Höhe an und aktualisiert sie bei jeder Geste und Größenänderung. */
 
-let hoehenProbe = "";
-
-function viewportAufrischen() {
-  if (!window.navigator.standalone) return;
-  const vorher = window.innerHeight;
-  const meta = document.querySelector('meta[name="viewport"]');
-  if (meta) {
-    const alt = meta.content;
-    meta.content = alt + ", maximum-scale=1";
-    requestAnimationFrame(function () { meta.content = alt; });
+function hoehenMessungEinrichten() {
+  const fuss = document.querySelector("footer.version");
+  if (!fuss) return;
+  const grund = fuss.textContent.split(" · Höhe")[0];
+  let zaehler = 0;
+  function zeigen(anlass) {
+    const vv = window.visualViewport;
+    zaehler++;
+    fuss.textContent = grund + " · i" + window.innerHeight + " c" + document.documentElement.clientHeight +
+      (vv ? " v" + Math.round(vv.height) + " o" + Math.round(vv.offsetTop) : "") +
+      " s" + Math.round(window.scrollY) + " (" + anlass + " " + zaehler + ")";
   }
-  try { window.scrollTo(0, 1); window.scrollTo(0, 0); } catch (e) {}
-  window.dispatchEvent(new Event("resize"));
-  setTimeout(function () {
-    // Vorübergehende Anzeige zum Testen: Höhe vor und nach dem Auffrischen.
-    hoehenProbe = " · Höhe " + vorher + "→" + window.innerHeight;
-    const fuss = document.querySelector("footer.version");
-    if (fuss && fuss.textContent.indexOf("Höhe ") < 0) fuss.textContent += hoehenProbe;
-  }, 500);
+  zeigen("start");
+  ["resize", "scroll", "orientationchange"].forEach(function (n) { window.addEventListener(n, function () { zeigen(n); }); });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", function () { zeigen("vvresize"); });
+    window.visualViewport.addEventListener("scroll", function () { zeigen("vvscroll"); });
+  }
+  ["touchstart", "touchmove", "touchend"].forEach(function (n) {
+    document.addEventListener(n, function () { zeigen(n); }, { passive: true });
+  });
 }
 
 async function start() {
-  setTimeout(viewportAufrischen, 150);
-  window.addEventListener("pageshow", function () { setTimeout(viewportAufrischen, 150); });
-  document.addEventListener("visibilitychange", function () { if (!document.hidden) setTimeout(viewportAufrischen, 150); });
+  hoehenMessungEinrichten();
   document.getElementById("einstellungen-knopf").addEventListener("click", einstellungenOeffnen);
   navigationEinrichten();
   try {
