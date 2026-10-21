@@ -592,4 +592,33 @@ nav button.aktiv { color: var(--akzent); background: var(--karte-hell); font-wei
 }
 
 .chips-detail { display: flex; flex-wrap: wrap; gap: 8px; }
-.chips + .chips { margin-top: -4px; }
+
+/* ===== Kachelansicht der Gerichte ===== */
+.filter-zeile { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.filter-zeile .chips { margin-top: 0; }
+.ansicht-schalter {
+  flex: none; display: flex; margin: 0 0 2px; padding: 3px;
+  background: var(--bg-tief); border-radius: 999px; box-shadow: var(--eingesenkt);
+}
+.ansicht-knopf {
+  display: flex; align-items: center; justify-content: center; width: 34px; height: 32px; padding: 0;
+  color: var(--text-leise); background: none; border: 0; border-radius: 999px; cursor: pointer;
+}
+.ansicht-knopf.aktiv { color: var(--akzent); background: var(--karte); box-shadow: var(--erhaben); }
+.kachel-raster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.kachel {
+  display: flex; flex-direction: column; overflow: hidden; padding: 0;
+  text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--karte); border: 1px solid var(--linie); border-radius: 20px; box-shadow: var(--erhaben);
+}
+.kachel:active { background: var(--karte-hell); }
+.kachel-bild { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+.kachel-text { display: flex; flex-direction: column; gap: 8px; flex: 1; padding: 10px 12px 12px; }
+.kachel h3 {
+  margin: 0; font-size: 0.95rem; line-height: 1.25; font-weight: 650; min-height: 2.5em;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+}
+.kachel-fuss { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; color: var(--text-leise); font-size: 0.78rem; }
+.kachel-diaet { display: flex; flex: none; color: var(--akzent); }
+.kachel-diaet svg { width: 20px; height: 20px; }
+.fab { margin-top: 14px; }

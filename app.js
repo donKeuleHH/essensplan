@@ -353,6 +353,73 @@ function wischZeile(inhalt, beschriftung, beiEntfernen, klasse) {
   return huelle;
 }
 
+/* ---------- Platzhalter für Gerichte ohne Foto: farbiger Kreis, Farbe richtet sich nach dem Titel ---------- */
+
+const KREIS_FARBEN = [
+  ["#964632", "#e6a05a"], ["#c88c28", "#f0c85a"], ["#5a788c", "#e69678"], ["#785a32", "#c89650"],
+  ["#466e5a", "#aac896"], ["#6e506e", "#d2a0c8"], ["#3c5a82", "#96bee6"], ["#8c3c46", "#e69696"]
+];
+
+function kreisBild(titel, klasse) {
+  let h = 0;
+  for (let i = 0; i < titel.length; i++) h = (h * 31 + titel.charCodeAt(i)) >>> 0;
+  const f = KREIS_FARBEN[h % KREIS_FARBEN.length];
+  const e = el("div", { class: klasse, "aria-hidden": "true" });
+  e.style.background = f[0];
+  e.style.position = "relative";
+  e.style.overflow = "hidden";
+  e.innerHTML = '<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style="position:absolute;inset:0;width:100%;height:100%">' +
+    '<circle cx="50" cy="50" r="31" fill="none" stroke="' + f[1] + '" stroke-width="17"/></svg>';
+  return e;
+}
+
+/* ---------- Ansicht der Gerichte: Kacheln oder Liste ---------- */
+
+function ansichtLesen() {
+  try { return localStorage.getItem("essensplan-ansicht") === "liste" ? "liste" : "kacheln"; } catch (e) { return "kacheln"; }
+}
+function ansichtSpeichern(a) {
+  try { localStorage.setItem("essensplan-ansicht", a); } catch (e) {}
+}
+
+const ICON_KACHELN = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.6"/><rect x="13" y="4" width="7" height="7" rx="1.6"/><rect x="4" y="13" width="7" height="7" rx="1.6"/><rect x="13" y="13" width="7" height="7" rx="1.6"/></svg>';
+const ICON_LISTE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="0.8"/><circle cx="4" cy="12" r="0.8"/><circle cx="4" cy="18" r="0.8"/></svg>';
+
+function ansichtSchalter() {
+  const aktuell = ansichtLesen();
+  function knopf(art, icon, beschriftung) {
+    const k = el("button", {
+      class: "ansicht-knopf" + (art === aktuell ? " aktiv" : ""), type: "button", "aria-label": beschriftung,
+      onclick: function () { ansichtSpeichern(art); listeZeichnen(); }
+    });
+    k.innerHTML = icon;
+    return k;
+  }
+  return el("div", { class: "ansicht-schalter" }, knopf("kacheln", ICON_KACHELN, "Kachelansicht"), knopf("liste", ICON_LISTE, "Listenansicht"));
+}
+
+const DIAET_ICON = {
+  vegetarisch: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 19c0-8 5-14 15-14 0 10-6 15-14 15"/><path d="M5 19c3-4 6-7 10-9"/></svg>',
+  vegan: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21v-9"/><path d="M12 12c0-4-3-6-7-6 0 4 3 6 7 6z"/><path d="M12 14c0-3 2.5-5 6-5 0 3-2.5 5-6 5z"/></svg>'
+};
+
+function gerichtKachel(g) {
+  const bild = g.bild
+    ? el("img", { class: "kachel-bild", src: g.bild, alt: "", loading: "lazy" })
+    : kreisBild(g.titel, "kachel-bild");
+  const info = [zahlText(g.portionen) + " Port."];
+  if (g.naehrwerte && g.naehrwerte.kcal !== null && g.naehrwerte.kcal !== undefined) info.push(zahlText(g.naehrwerte.kcal) + " kcal");
+  const symbol = el("span", { class: "kachel-diaet", title: ERN_TEXT[g.ernaehrung] || "" });
+  if (DIAET_ICON[g.ernaehrung]) symbol.innerHTML = DIAET_ICON[g.ernaehrung];
+  return el("button", { class: "kachel", type: "button", onclick: function () { detailOeffnen(g.id); } },
+    bild,
+    el("div", { class: "kachel-text" },
+      el("h3", { text: g.titel }),
+      el("div", { class: "kachel-fuss" }, el("span", { text: info.join(" · ") }), symbol)
+    )
+  );
+}
+
 function listeZeichnen() {
   const box = document.getElementById("gerichte");
   const sortiert = gerichte.slice().sort(function (a, b) { return a.titel.localeCompare(b.titel, "de"); });
@@ -366,16 +433,23 @@ function listeZeichnen() {
     ));
   } else {
     teile.push(khChips(khFilterListe, function (w) { khFilterListe = w; listeZeichnen(); }));
-    teile.push(ernChips(ernFilterListe, function (w) { ernFilterListe = w; listeZeichnen(); }));
+    teile.push(el("div", { class: "filter-zeile" },
+      ernChips(ernFilterListe, function (w) { ernFilterListe = w; listeZeichnen(); }),
+      ansichtSchalter()
+    ));
     const sichtbar = sortiert.filter(function (g) {
       return (!khFilterListe || g.khStufe === khFilterListe) && ernaehrungPasst(g, ernFilterListe);
     });
     if (sichtbar.length === 0) {
       teile.push(el("p", { class: "leise", text: "Kein Gericht mit dieser Angabe. Kohlenhydrate und Ernährung stellst du beim Bearbeiten eines Gerichts ein." }));
     }
-    sichtbar.forEach(function (g) {
-      teile.push(wischZeile(gerichtKarte(g), "Löschen", function () { gerichtLoeschen(g); }));
-    });
+    if (ansichtLesen() === "kacheln") {
+      teile.push(el("div", { class: "kachel-raster" }, sichtbar.map(gerichtKachel)));
+    } else {
+      sichtbar.forEach(function (g) {
+        teile.push(wischZeile(gerichtKarte(g), "Löschen", function () { gerichtLoeschen(g); }));
+      });
+    }
   }
 
   teile.push(el("button", {
@@ -391,7 +465,7 @@ function listeZeichnen() {
 function gerichtKarte(g, beiKlick) {
   const bild = g.bild
     ? el("img", { class: "thumb", src: g.bild, alt: "", loading: "lazy" })
-    : el("div", { class: "thumb platzhalter", text: "🍽️" });
+    : kreisBild(g.titel, "thumb");
 
   const meta = [zahlText(g.portionen) + " " + pluralPortionen(g.portionen)];
   if (g.naehrwerte && g.naehrwerte.kcal !== null && g.naehrwerte.kcal !== undefined) {
@@ -896,7 +970,7 @@ function tagKarte(index, tag, g, istHeute, istSport) {
     inhalt = [
       g.bild
         ? el("img", { class: "thumb klein", src: g.bild, alt: "", loading: "lazy" })
-        : el("div", { class: "thumb klein platzhalter", text: "🍽️" }),
+        : kreisBild(g.titel, "thumb klein"),
       el("div", { class: "gericht-info" }, el("h3", { text: g.titel }), el("p", { text: kurzInfo(g) }))
     ];
   } else {
