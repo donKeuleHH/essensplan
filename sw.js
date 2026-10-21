@@ -1,8 +1,8 @@
-// Service Worker für den Essensplan.
+// Service Worker für MealMap.
 // Strategie: Wenn das Netz da ist, wird immer die neueste Version geladen.
 // Ohne Netz startet die App aus dem Zwischenspeicher (offline).
 // Bei Änderungen an der Dateiliste unten die Versionsnummer erhöhen.
-const VERSION = "essensplan-v25";
+const VERSION = "essensplan-v26";
 const DATEIEN = [
   "./",
   "index.html",

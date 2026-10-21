@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Essensplan</title>
+  <title>MealMap</title>
   <meta name="theme-color" content="#2a313c">
   <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Essensplan">
+  <meta name="apple-mobile-web-app-title" content="MealMap">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -28,6 +28,19 @@
   </script>
 </head>
 <body>
+  <div id="splash" aria-hidden="true">
+    <div class="splash-inhalt">
+      <svg class="splash-logo" viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M32 3C20.4 3 11 11.9 11 23c0 15 21 38 21 38s21-23 21-38C53 11.9 43.6 3 32 3z" fill="var(--akzent)"/>
+        <g fill="none" stroke="var(--auf-akzent)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M25.5 14v8M32 14v8M38.5 14v8"/><path d="M25.5 22c0 3.6 2.7 5.2 6.5 5.2s6.5-1.6 6.5-5.2"/><path d="M32 27.5V42"/>
+        </g>
+      </svg>
+      <div class="splash-name">Meal<span>Map</span></div>
+      <div class="splash-zeile">Dein Wochenplan</div>
+    </div>
+  </div>
+
   <header>
     <h1 id="titel">Gerichte</h1>
     <div class="kopf-rechts">
@@ -46,7 +59,7 @@
     <section id="einkauf" class="ansicht"></section>
   </main>
 
-  <footer class="version">Version 2.4 · Wochen wischen</footer>
+  <footer class="version">Version 2.5 · MealMap</footer>
 
   <nav>
     <button class="aktiv" data-ziel="gerichte" data-titel="Gerichte">

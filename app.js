@@ -1,7 +1,7 @@
 "use strict";
 
 /* =====================================================================
-   Essensplan
+   MealMap
    Alle Daten liegen zuerst auf dem Gerät (IndexedDB), die App funktioniert
    also auch offline. Ist in config.js ein Supabase-Projekt eingetragen und
    man angemeldet, werden die Daten zusätzlich mit den anderen Geräten abgeglichen.
@@ -2064,7 +2064,25 @@ async function start() {
   }
 }
 
-start();
+/* ---------- Startbild ---------- */
+
+const SPLASH_MINDESTDAUER = 1100;
+const SPLASH_START = Date.now();
+let splashWeg = false;
+function splashAusblenden() {
+  if (splashWeg) return;
+  splashWeg = true;
+  const sp = document.getElementById("splash");
+  if (!sp) return;
+  const warte = Math.max(0, SPLASH_MINDESTDAUER - (Date.now() - SPLASH_START));
+  setTimeout(function () {
+    sp.classList.add("weg");
+    setTimeout(function () { sp.remove(); }, 600);
+  }, warte);
+}
+setTimeout(splashAusblenden, 6000); // Sicherheitsnetz, falls beim Start etwas hängt
+
+start().then(splashAusblenden, splashAusblenden);
 
 /* ---------- Offline-Fähigkeit und automatische Updates ---------- */
 

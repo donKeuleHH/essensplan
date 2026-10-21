@@ -1,6 +1,6 @@
 {
-  "name": "Essensplan",
-  "short_name": "Essensplan",
+  "name": "MealMap",
+  "short_name": "MealMap",
   "description": "Wochenplaner für Gerichte und Einkaufsliste",
   "lang": "de",
   "start_url": "./",
