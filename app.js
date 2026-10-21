@@ -1955,7 +1955,35 @@ function einstellungenOeffnen() {
   });
 }
 
+/* ---------- Höhe der installierten App auffrischen ----------
+   Auf dem iPhone startet die installierte App mit einer zu kurzen Seitenhöhe, die erst nach einer Wischgeste
+   neu berechnet wird. Hier wird dieses Neuberechnen beim Start selbst angestoßen. */
+
+let hoehenProbe = "";
+
+function viewportAufrischen() {
+  if (!window.navigator.standalone) return;
+  const vorher = window.innerHeight;
+  const meta = document.querySelector('meta[name="viewport"]');
+  if (meta) {
+    const alt = meta.content;
+    meta.content = alt + ", maximum-scale=1";
+    requestAnimationFrame(function () { meta.content = alt; });
+  }
+  try { window.scrollTo(0, 1); window.scrollTo(0, 0); } catch (e) {}
+  window.dispatchEvent(new Event("resize"));
+  setTimeout(function () {
+    // Vorübergehende Anzeige zum Testen: Höhe vor und nach dem Auffrischen.
+    hoehenProbe = " · Höhe " + vorher + "→" + window.innerHeight;
+    const fuss = document.querySelector("footer.version");
+    if (fuss && fuss.textContent.indexOf("Höhe ") < 0) fuss.textContent += hoehenProbe;
+  }, 500);
+}
+
 async function start() {
+  setTimeout(viewportAufrischen, 150);
+  window.addEventListener("pageshow", function () { setTimeout(viewportAufrischen, 150); });
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) setTimeout(viewportAufrischen, 150); });
   document.getElementById("einstellungen-knopf").addEventListener("click", einstellungenOeffnen);
   navigationEinrichten();
   try {
