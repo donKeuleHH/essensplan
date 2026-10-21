@@ -14,11 +14,28 @@
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="stylesheet" href="style.css">
+  <script>
+    // Gewählte Farbvariante sofort setzen, damit beim Start nichts aufblitzt.
+    try {
+      var s = localStorage.getItem("essensplan-skin");
+      var k = {pastell: ["#f7e6e4", "light"], tusche: ["#f1f0e2", "light"], sturm: ["#2e3c4a", "dark"]}[s];
+      if (k) {
+        document.documentElement.dataset.skin = s;
+        document.querySelector('meta[name="theme-color"]').content = k[0];
+        document.querySelector('meta[name="color-scheme"]').content = k[1];
+      }
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <header>
     <h1 id="titel">Gerichte</h1>
-    <button id="sync-knopf" class="sync-knopf" type="button" hidden></button>
+    <div class="kopf-rechts">
+      <button id="sync-knopf" class="sync-knopf" type="button" hidden></button>
+      <button id="einstellungen-knopf" class="zahnrad" type="button" aria-label="Einstellungen">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
   </header>
 
   <main>
@@ -29,7 +46,7 @@
     <section id="einkauf" class="ansicht"></section>
   </main>
 
-  <footer class="version">Version 1.8 · Sporttage</footer>
+  <footer class="version">Version 1.9 · Farbvarianten</footer>
 
   <nav>
     <button class="aktiv" data-ziel="gerichte" data-titel="Gerichte">

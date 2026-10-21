@@ -43,6 +43,26 @@ header {
   gap: 12px;
   padding: calc(env(safe-area-inset-top) + 14px) 20px 14px;
 }
+.kopf-rechts { display: flex; align-items: center; gap: 10px; }
+.zahnrad {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0;
+  color: var(--text-leise); background: var(--karte);
+  border: 1px solid var(--linie); border-radius: 50%;
+  box-shadow: var(--erhaben); cursor: pointer;
+}
+.zahnrad:active { color: var(--akzent); }
+.skin-liste { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.skin-kachel {
+  font: inherit; color: var(--text); text-align: left; cursor: pointer;
+  padding: 10px; background: var(--karte);
+  border: 2px solid var(--linie); border-radius: 20px; box-shadow: var(--erhaben);
+}
+.skin-kachel.aktiv { border-color: var(--akzent); }
+.skin-farben { display: flex; height: 46px; border-radius: 12px; overflow: hidden; margin-bottom: 8px; border: 1px solid var(--linie); }
+.skin-farben span { flex: 1; }
+.skin-name { display: block; font-weight: 650; font-size: 0.9rem; }
+.skin-name small { display: block; margin-top: 2px; font-weight: 500; color: var(--text-leise); font-size: 0.75rem; }
 .sync-knopf {
   flex: none;
   font: inherit;

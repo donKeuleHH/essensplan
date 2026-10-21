@@ -1783,7 +1783,59 @@ function syncEinrichten() {
 
 /* ---------- Start ---------- */
 
+/* ---------- Einstellungen: Farbvarianten ---------- */
+
+const SKINS = [
+  { id: "schiefer", name: "Schiefer & Bernstein", art: "dunkel", bg: "#2a313c", meta: "#2a313c", farben: ["#2a313c", "#323a47", "#f5b73c", "#eef1f5"] },
+  { id: "pastell", name: "Pastel garden", art: "hell", meta: "#f7e6e4", farben: ["#f7e6e4", "#fcf1ef", "#c75f71", "#54463a"] },
+  { id: "tusche", name: "Ink wash", art: "hell", meta: "#f1f0e2", farben: ["#f1f0e2", "#f9f8ed", "#5f7489", "#3a3a3a"] },
+  { id: "sturm", name: "Stormy morning", art: "dunkel", meta: "#2e3c4a", farben: ["#2e3c4a", "#384959", "#88bdf2", "#ebf3fb"] }
+];
+
+function skinLesen() {
+  try { const s = localStorage.getItem("essensplan-skin"); if (SKINS.some(function (x) { return x.id === s; })) return s; } catch (e) {}
+  return "schiefer";
+}
+
+function skinAnwenden(id) {
+  const skin = SKINS.find(function (x) { return x.id === id; }) || SKINS[0];
+  if (skin.id === "schiefer") delete document.documentElement.dataset.skin;
+  else document.documentElement.dataset.skin = skin.id;
+  const tc = document.querySelector('meta[name="theme-color"]');
+  const cs = document.querySelector('meta[name="color-scheme"]');
+  if (tc) tc.content = skin.meta;
+  if (cs) cs.content = skin.art === "hell" ? "light" : "dark";
+  try { localStorage.setItem("essensplan-skin", skin.id); } catch (e) {}
+}
+
+function einstellungenOeffnen() {
+  const liste = el("div", { class: "skin-liste" });
+  function zeichnen() {
+    const aktuell = skinLesen();
+    liste.replaceChildren.apply(liste, SKINS.map(function (skin) {
+      return el("button", {
+        class: "skin-kachel" + (skin.id === aktuell ? " aktiv" : ""), type: "button", "data-skin": skin.id,
+        onclick: function () { skinAnwenden(skin.id); zeichnen(); }
+      },
+        el("div", { class: "skin-farben" }, skin.farben.map(function (f) { return el("span", { style: "background:" + f }); })),
+        el("span", { class: "skin-name" }, skin.name, el("small", { text: skin.art === "hell" ? "hell" : "dunkel" }))
+      );
+    }));
+  }
+  zeichnen();
+  blattZeigen({
+    titel: "Einstellungen",
+    links: { text: "Schließen", aktion: blattSchliessen },
+    inhalt: [
+      el("h3", { class: "abschnitt", text: "Farbvariante" }),
+      liste,
+      el("p", { class: "leise", style: "margin-top: 16px", text: "Die Wahl gilt nur für dieses Gerät." })
+    ]
+  });
+}
+
 async function start() {
+  document.getElementById("einstellungen-knopf").addEventListener("click", einstellungenOeffnen);
   navigationEinrichten();
   try {
     db = await datenbankOeffnen();
