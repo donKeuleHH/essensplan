@@ -202,17 +202,100 @@ function khChips(aktuell, beiWahl) {
   zeichnen(aktuell);
   return leiste;
 }
-let khFilterListe = "";
+let filterListe = { kh: "", ern: "" };
+let suchtextListe = "";
 
 // Ernährungsform eines Gerichts: "" (keine Angabe), "vegetarisch" oder "vegan".
 // Vegane Gerichte sind auch vegetarisch und erscheinen deshalb im Filter "Vegetarisch" mit.
 const ERN_TEXT = { vegetarisch: "vegetarisch", vegan: "vegan" };
-let ernFilterListe = "";
 
 function ernaehrungPasst(g, filter) {
   if (!filter) return true;
   if (filter === "vegan") return g.ernaehrung === "vegan";
   return g.ernaehrung === "vegetarisch" || g.ernaehrung === "vegan";
+}
+
+// Trifft ein Gericht Suchtext (Titel oder Zutat) und Filter? zustand: { kh, ern }
+function gerichtTrifft(g, zustand, text) {
+  const q = (text || "").trim().toLowerCase();
+  if (q) {
+    const im = g.titel.toLowerCase().indexOf(q) >= 0 ||
+      (g.zutaten || []).some(function (z) { return (z.name || "").toLowerCase().indexOf(q) >= 0; });
+    if (!im) return false;
+  }
+  return (!zustand.kh || g.khStufe === zustand.kh) && ernaehrungPasst(g, zustand.ern);
+}
+
+const ICON_LUPE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
+const ICON_FILTER = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>';
+
+// Blatt von unten mit den Filtern (Kohlenhydrate, Ernährung). zustand wird direkt verändert.
+function filterBlattOeffnen(zustand, suchtext, beiAenderung) {
+  const abdunkeln = el("div", { class: "abdunkeln" });
+  const blattEl = el("div", { class: "filterblatt", role: "dialog", "aria-label": "Filter" });
+  const fertig = el("button", { class: "knopf knopf-primaer", type: "button" });
+  const inhalt = el("div");
+
+  function schliessen() { abdunkeln.remove(); blattEl.remove(); }
+  function zaehlen() { return gerichte.filter(function (g) { return gerichtTrifft(g, zustand, suchtext()); }).length; }
+  function anzahlAktualisieren() {
+    const n = zaehlen();
+    fertig.textContent = n === 0 ? "Keine Treffer" : n === 1 ? "1 Gericht anzeigen" : n + " Gerichte anzeigen";
+  }
+  function geaendert() { anzahlAktualisieren(); beiAenderung(); }
+  function aufbauen() {
+    inhalt.replaceChildren(
+      el("h3", { class: "abschnitt", text: "Kohlenhydrate" }),
+      khChips(zustand.kh, function (w) { zustand.kh = w; geaendert(); }),
+      el("h3", { class: "abschnitt", text: "Ernährung" }),
+      ernChips(zustand.ern, function (w) { zustand.ern = w; geaendert(); })
+    );
+  }
+  abdunkeln.addEventListener("click", schliessen);
+  fertig.addEventListener("click", schliessen);
+  blattEl.append(
+    el("div", { class: "griff" }),
+    el("h2", { text: "Filter" }),
+    inhalt,
+    el("div", { class: "filterfuss" },
+      el("button", { class: "knopf knopf-sekundaer", type: "button", text: "Zurücksetzen",
+        onclick: function () { zustand.kh = ""; zustand.ern = ""; aufbauen(); geaendert(); } }),
+      fertig
+    )
+  );
+  aufbauen();
+  anzahlAktualisieren();
+  document.body.append(abdunkeln, blattEl);
+}
+
+// Suchfeld, Filter-Knopf (mit Zahl der aktiven Filter) und optional der Umschalter Kacheln/Liste.
+function suchZeile(optionen) {
+  const zustand = optionen.zustand;
+  const eingabe = el("input", {
+    type: "search", class: "suchfeld-eingabe", autocomplete: "off", autocapitalize: "off",
+    placeholder: "Suchen", value: optionen.wert || ""
+  });
+  const lupe = el("span", { class: "suchfeld-lupe" });
+  lupe.innerHTML = ICON_LUPE;
+  const zahl = el("span", { class: "zahl", hidden: true });
+  const knopf = el("button", { class: "rundknopf", type: "button", "aria-label": "Filter" }, zahl);
+  knopf.insertAdjacentHTML("afterbegin", ICON_FILTER);
+  function badge() {
+    const n = (zustand.kh ? 1 : 0) + (zustand.ern ? 1 : 0);
+    zahl.textContent = String(n); zahl.hidden = n === 0;
+    knopf.classList.toggle("an", n > 0);
+  }
+  badge();
+  eingabe.addEventListener("input", function () { optionen.beiEingabe(eingabe.value); });
+  knopf.addEventListener("click", function () {
+    eingabe.blur();
+    filterBlattOeffnen(zustand, function () { return eingabe.value; }, function () { badge(); optionen.beiFilter(); });
+  });
+  return el("div", { class: "suchzeile" },
+    el("div", { class: "suchfeld" }, lupe, eingabe),
+    knopf,
+    optionen.umschalter ? ansichtSchalter() : null
+  );
 }
 
 function ernChips(aktuell, beiWahl) {
@@ -432,24 +515,32 @@ function listeZeichnen() {
       el("p", { text: "Lege dein erstes Gericht an: mit Foto, Zutaten und Nährwerten." })
     ));
   } else {
-    teile.push(khChips(khFilterListe, function (w) { khFilterListe = w; listeZeichnen(); }));
-    teile.push(el("div", { class: "filter-zeile" },
-      ernChips(ernFilterListe, function (w) { ernFilterListe = w; listeZeichnen(); }),
-      ansichtSchalter()
-    ));
-    const sichtbar = sortiert.filter(function (g) {
-      return (!khFilterListe || g.khStufe === khFilterListe) && ernaehrungPasst(g, ernFilterListe);
-    });
-    if (sichtbar.length === 0) {
-      teile.push(el("p", { class: "leise", text: "Kein Gericht mit dieser Angabe. Kohlenhydrate und Ernährung stellst du beim Bearbeiten eines Gerichts ein." }));
+    const ergebnis = el("div");
+    function ergebnisZeichnen() {
+      const sichtbar = sortiert.filter(function (g) { return gerichtTrifft(g, filterListe, suchtextListe); });
+      const innen = [];
+      if (sichtbar.length === 0) {
+        const gefiltert = suchtextListe.trim() || filterListe.kh || filterListe.ern;
+        innen.push(el("p", { class: "leise", text: gefiltert
+          ? "Kein Gericht gefunden. Passe Suche oder Filter an."
+          : "Kein Gericht vorhanden." }));
+      }
+      if (ansichtLesen() === "kacheln") {
+        innen.push(el("div", { class: "kachel-raster" }, sichtbar.map(gerichtKachel)));
+      } else {
+        sichtbar.forEach(function (g) {
+          innen.push(wischZeile(gerichtKarte(g), "Löschen", function () { gerichtLoeschen(g); }));
+        });
+      }
+      ergebnis.replaceChildren.apply(ergebnis, innen);
     }
-    if (ansichtLesen() === "kacheln") {
-      teile.push(el("div", { class: "kachel-raster" }, sichtbar.map(gerichtKachel)));
-    } else {
-      sichtbar.forEach(function (g) {
-        teile.push(wischZeile(gerichtKarte(g), "Löschen", function () { gerichtLoeschen(g); }));
-      });
-    }
+    teile.push(suchZeile({
+      zustand: filterListe, wert: suchtextListe, umschalter: true,
+      beiEingabe: function (t) { suchtextListe = t; ergebnisZeichnen(); },
+      beiFilter: ergebnisZeichnen
+    }));
+    teile.push(ergebnis);
+    ergebnisZeichnen();
   }
 
   teile.push(el("button", {
@@ -1073,21 +1164,18 @@ function tagKarte(index, tag, g, istHeute, istSport) {
 function gerichtWaehlen(index, aktuelleId) {
   const montag = angezeigteWoche;
   const tag = tagVerschieben(montag, index);
-  const suche = el("input", {
-    type: "search", class: "eingabe", autocomplete: "off", autocapitalize: "off", placeholder: "Gericht suchen …"
-  });
   const liste = el("div", { style: "margin-top: 14px" });
-  let khAuswahl = "";
-  let ernAuswahl = "";
-  const chips = el("div", {},
-    khChips("", function (w) { khAuswahl = w; listeZeichnen2(); }),
-    ernChips("", function (w) { ernAuswahl = w; listeZeichnen2(); })
-  );
+  const auswahlFilter = { kh: "", ern: "" };
+  let suchtext = "";
+  const kopfzeile = suchZeile({
+    zustand: auswahlFilter, wert: "", umschalter: false,
+    beiEingabe: function (t) { suchtext = t; listeZeichnen2(); },
+    beiFilter: function () { listeZeichnen2(); }
+  });
 
   function listeZeichnen2() {
-    const q = suche.value.trim().toLowerCase();
     const treffer = gerichte
-      .filter(function (g) { return g.titel.toLowerCase().indexOf(q) >= 0 && (!khAuswahl || g.khStufe === khAuswahl) && ernaehrungPasst(g, ernAuswahl); })
+      .filter(function (g) { return gerichtTrifft(g, auswahlFilter, suchtext); })
       .sort(function (a, b) { return a.titel.localeCompare(b.titel, "de"); });
     if (gerichte.length === 0) {
       liste.replaceChildren(el("div", { class: "karte" },
@@ -1100,15 +1188,13 @@ function gerichtWaehlen(index, aktuelleId) {
       }));
     }
   }
-  suche.addEventListener("input", listeZeichnen2);
   listeZeichnen2();
 
   blattZeigen({
     titel: TAGNAMEN[index] + ", " + kurzDatum(tag),
     links: { text: "Abbrechen", aktion: blattSchliessen },
     inhalt: [
-      gerichte.length > 0 ? suche : null,
-      gerichte.length > 0 ? chips : null,
+      gerichte.length > 0 ? kopfzeile : null,
       liste,
       aktuelleId !== null && aktuelleId !== undefined
         ? el("button", {
