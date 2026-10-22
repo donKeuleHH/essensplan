@@ -686,3 +686,8 @@ main { touch-action: pan-y; }
 @keyframes blatt-hoch { from { transform: translateY(100%); } to { transform: none; } }
 @keyframes abdunkeln-ein { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .abdunkeln, .filterblatt { animation: none; } }
+
+/* Langes Drücken (Sport-Badge, Wischen): keinen Text markieren und kein iOS-Menü (Kopieren / Nachschlagen) zeigen */
+.tag, .tag *, .wisch, .gericht-karte, .kachel, .kachel *, .nav-icon, nav button {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
