@@ -642,7 +642,14 @@ main { touch-action: pan-y; }
 @media (prefers-reduced-motion: reduce) { .splash-logo, .splash-name, .splash-zeile { animation: none; } }
 
 /* ===== Suchzeile und Filter-Blatt ===== */
-.suchzeile { display: flex; align-items: center; gap: 10px; margin: 4px 0 16px; }
+.suchzeile {
+  position: sticky; top: -18px; z-index: 4;
+  display: flex; align-items: center; gap: 10px;
+  margin: -6px -16px 10px; padding: 8px 16px;
+  background: var(--bg);
+  transition: transform 0.22s ease;
+}
+.suchzeile.weg { transform: translateY(calc(-100% - 24px)); }
 .suchfeld {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 46px; padding: 0 14px;
   color: var(--text-leise); background: var(--bg-tief); border-radius: 999px; box-shadow: var(--eingesenkt);
@@ -726,3 +733,5 @@ main { touch-action: pan-y; }
 :root[data-skin="nacht"] .ansicht-knopf.aktiv { background: var(--akzent); color: var(--auf-akzent); box-shadow: none; }
 :root[data-skin="nacht"] nav { background: #1a1a1a; }
 :root[data-skin="nacht"] nav button.aktiv { background: var(--akzent); color: var(--auf-akzent); }
+
+.blatt-inhalt .suchzeile { top: -16px; }

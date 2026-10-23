@@ -335,12 +335,43 @@ function abgehakteFuer(woche) {
 
 /* ---------- Navigation ---------- */
 
+/* ---------- Suchzeile: haftet oben, verschwindet beim Hinunterscrollen, kommt beim Hinaufscrollen zurück ---------- */
+
+function suchzeileScrollEinrichten() {
+  const letzte = new WeakMap();
+  // scroll-Ereignisse "blubbern" nicht nach oben, deshalb im Erfassungsmodus am document lauschen.
+  document.addEventListener("scroll", function (e) {
+    const behaelter = e.target;
+    if (!behaelter || !behaelter.querySelector) return;
+    const zeile = behaelter.querySelector(".suchzeile");
+    if (!zeile) return;
+    const jetzt = behaelter.scrollTop;
+    const davor = letzte.get(behaelter) || 0;
+    const unterschied = jetzt - davor;
+    if (jetzt < 40) {
+      zeile.classList.remove("weg");
+    } else if (unterschied > 6) {
+      // Beim Tippen im Suchfeld bleibt die Zeile sichtbar.
+      if (!zeile.contains(document.activeElement)) zeile.classList.add("weg");
+    } else if (unterschied < -6) {
+      zeile.classList.remove("weg");
+    }
+    if (Math.abs(unterschied) > 6 || jetzt < 40) letzte.set(behaelter, jetzt);
+  }, true);
+}
+
 function navigationEinrichten() {
   const reiter = document.querySelectorAll("nav button");
   const ansichten = document.querySelectorAll(".ansicht");
   const titel = document.getElementById("titel");
   reiter.forEach(function (knopf) {
     knopf.addEventListener("click", function () {
+      // Tipp auf den schon aktiven Reiter: nach oben springen (wie bei iOS-Apps üblich).
+      if (knopf.classList.contains("aktiv")) {
+        const haupt = document.querySelector("main");
+        if (haupt) haupt.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
       reiter.forEach(function (k) { k.classList.remove("aktiv"); });
       ansichten.forEach(function (a) { a.classList.remove("aktiv"); });
       knopf.classList.add("aktiv");
@@ -2116,6 +2147,7 @@ function einstellungenOeffnen() {
 
 async function start() {
   wochenWischenEinrichten();
+  suchzeileScrollEinrichten();
   document.getElementById("einstellungen-knopf").addEventListener("click", einstellungenOeffnen);
   navigationEinrichten();
   try {
