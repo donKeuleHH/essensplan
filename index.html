@@ -31,7 +31,7 @@
     // Gewählte Farbvariante sofort setzen, damit beim Start nichts aufblitzt.
     try {
       var s = localStorage.getItem("essensplan-skin");
-      var k = {pastell: ["#f7e6e4", "light"], tusche: ["#f1f0e2", "light"], sturm: ["#2e3c4a", "dark"]}[s];
+      var k = {pastell: ["#f7e6e4", "light"], tusche: ["#f1f0e2", "light"], sturm: ["#2e3c4a", "dark"], nacht: ["#121212", "dark"]}[s];
       if (k) {
         document.documentElement.dataset.skin = s;
         document.querySelector('meta[name="theme-color"]').content = k[0];
@@ -72,7 +72,7 @@
     <section id="einkauf" class="ansicht"></section>
   </main>
 
-  <footer class="version">Version 2.8 · Kein Markieren</footer>
+  <footer class="version">Version 2.9 · Night Pastel</footer>
 
   <nav>
     <button class="aktiv" data-ziel="gerichte" data-titel="Gerichte">

@@ -691,3 +691,38 @@ main { touch-action: pan-y; }
 .tag, .tag *, .wisch, .gericht-karte, .kachel, .kachel *, .nav-icon, nav button {
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
+
+/* ===== Farbvariante Night Pastel (fast schwarz, Pastellgelb und Hellblau) ===== */
+:root[data-skin="nacht"] {
+  --bg: #121212; --bg-tief: #0b0b0b; --karte: #1c1c1c; --karte-hell: #262626;
+  --linie: rgba(255, 255, 255, 0.09);
+  --akzent: #f6f3a8; --akzent-schwach: rgba(246, 243, 168, 0.14); --auf-akzent: #1b1a10;
+  --text: #f1f1ee; --text-leise: #86868a;
+  --gefahr: #e8714f; --auf-gefahr: #1d0b05;
+  --sport: #9dc3d4; --auf-sport: #0f1d24;
+  --knopf-glow: rgba(246, 243, 168, 0);
+  --schwebend: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --erhaben: 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --eingesenkt: none;
+  color-scheme: dark;
+}
+:root[data-skin="nacht"] .woche-kopf { background: #9dc3d4; border-radius: 26px; padding: 14px; }
+:root[data-skin="nacht"] .woche-kopf .woche-kw,
+:root[data-skin="nacht"] .woche-kopf .woche-datum { color: #10181c; }
+:root[data-skin="nacht"] .woche-kopf .woche-datum { opacity: 0.7; }
+:root[data-skin="nacht"] .woche-kopf .pfeil { background: #10181c; color: #9dc3d4; border: 0; box-shadow: none; }
+:root[data-skin="nacht"] .chip { background: transparent; box-shadow: none; }
+:root[data-skin="nacht"] .chip.aktiv { background: var(--akzent); color: var(--auf-akzent); border-color: var(--akzent); }
+:root[data-skin="nacht"] .tag,
+:root[data-skin="nacht"] .tag.heute,
+:root[data-skin="nacht"] .kachel,
+:root[data-skin="nacht"] .rundknopf,
+:root[data-skin="nacht"] .zahnrad,
+:root[data-skin="nacht"] .sync-knopf,
+:root[data-skin="nacht"] .knopf-primaer,
+:root[data-skin="nacht"] nav { box-shadow: none; }
+:root[data-skin="nacht"] .suchfeld,
+:root[data-skin="nacht"] .ansicht-schalter { background: var(--karte); box-shadow: none; }
+:root[data-skin="nacht"] .ansicht-knopf.aktiv { background: var(--akzent); color: var(--auf-akzent); box-shadow: none; }
+:root[data-skin="nacht"] nav { background: #1a1a1a; }
+:root[data-skin="nacht"] nav button.aktiv { background: var(--akzent); color: var(--auf-akzent); }
