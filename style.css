@@ -619,7 +619,7 @@ nav button.aktiv { color: var(--akzent); background: var(--karte-hell); font-wei
 .kachel-fuss { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; color: var(--text-leise); font-size: 0.78rem; }
 .kachel-diaet { display: flex; flex: none; color: var(--akzent); }
 .kachel-diaet svg { width: 20px; height: 20px; }
-.fab { margin-top: 14px; }
+.fab { margin-top: 14px; z-index: 5; }
 
 /* Wochen-Wischen: senkrecht scrollt der Browser, waagerecht gehört der App */
 main { touch-action: pan-y; }
