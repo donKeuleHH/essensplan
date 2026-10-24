@@ -665,7 +665,7 @@ function detailOeffnen(id) {
     inhalt.push(el("h3", { class: "abschnitt", text: "Nährwerte pro Portion" }));
     inhalt.push(el("div", { class: "kacheln" }, werte.map(function (w) {
       const text = w[0] === null || w[0] === undefined ? "–" : zahlText(w[0]) + " " + w[1];
-      return el("div", { class: "kachel" },
+      return el("div", { class: "nw-kachel" },
         el("div", { class: "zahl", text: text }),
         el("div", { class: "name", text: w[2] })
       );

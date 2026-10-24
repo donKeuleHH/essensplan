@@ -225,14 +225,14 @@ main { flex: 1; overflow-y: auto; padding: 18px 16px 24px; }
 .detail-titel { margin: 0 0 4px; font-size: 1.7rem; font-weight: 700; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .abschnitt { margin: 22px 0 10px; font-size: 0.8rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-leise); }
 .kacheln { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.kachel {
+.nw-kachel {
   background: var(--bg-tief);
-  border-radius: 16px;
-  padding: 14px;
+  border-radius: 14px;
+  padding: 9px 14px 10px;
   box-shadow: var(--eingesenkt);
 }
-.kachel .zahl { font-size: 1.5rem; font-weight: 700; }
-.kachel .name { margin-top: 2px; font-size: 0.8rem; color: var(--text-leise); }
+.nw-kachel .zahl { font-size: 1.1rem; font-weight: 700; }
+.nw-kachel .name { margin-top: 1px; font-size: 0.75rem; color: var(--text-leise); }
 .zutatenliste { list-style: none; margin: 0; padding: 0; }
 .zutatenliste li {
   display: flex;
