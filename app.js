@@ -1035,15 +1035,32 @@ function zutatZerlegen(zeile) {
 }
 
 // Macht aus der Antwort des Importhelfers ein Gericht, das im Formular geöffnet werden kann.
-function rezeptZuGericht(r) {
+const IMPORT_GANZE = { "Stück": 0.5, Dose: 0.5, Packung: 0.5, Bund: 0.5, Prise: 0.5 };
+
+function importPersonenLesen() {
+  try { const n = Number(localStorage.getItem("essensplan-import-personen")); if (Number.isInteger(n) && n >= 1 && n <= 12) return n; } catch (e) {}
+  return 2;
+}
+
+function rezeptZuGericht(r, ziel) {
   const zutaten = [];
+  const original = r.portionen && r.portionen > 0 ? r.portionen : null;
+  const zielPortionen = ziel && ziel > 0 ? ziel : (original || 2);
+  const faktor = original ? zielPortionen / original : 1;
   const hinweise = [];
   (r.zutaten || []).forEach(function (zeile) {
     const z = zutatZerlegen(zeile);
-    zutaten.push({ name: z.name, menge: z.menge, einheit: z.einheit });
+    let menge = z.menge;
+    if (menge !== null && faktor !== 1) {
+      menge = menge * faktor;
+      const schritt = IMPORT_GANZE[z.einheit];
+      menge = schritt ? Math.max(schritt, Math.round(menge / schritt) * schritt) : Math.round(menge * 100) / 100;
+    }
+    zutaten.push({ name: z.name, menge: menge, einheit: z.einheit });
     if (z.hinweis) hinweise.push("- " + z.name + ": " + z.hinweis);
   });
   const teile = [];
+  if (original && faktor !== 1) teile.push("Originalrezept für " + zahlText(original) + " Portionen, hier auf " + zahlText(zielPortionen) + " umgerechnet.");
   const zeit = r.zeiten || {};
   const zeiten = [];
   if (zeit.vorbereiten) zeiten.push("Zubereitung " + zeit.vorbereiten + " Min");
@@ -1064,7 +1081,7 @@ function rezeptZuGericht(r) {
   return {
     titel: String(r.titel || "").slice(0, 80),
     bild: r.bildNeu || null,
-    portionen: r.portionen && r.portionen > 0 ? r.portionen : 2,
+    portionen: zielPortionen,
     zutaten: zutaten.length ? zutaten : [{ name: "", menge: null, einheit: "g" }],
     naehrwerte: { kcal: n.kcal === undefined ? null : n.kcal, eiweiss: n.eiweiss === undefined ? null : n.eiweiss,
       kohlenhydrate: n.kohlenhydrate === undefined ? null : n.kohlenhydrate, fett: n.fett === undefined ? null : n.fett },
@@ -1073,7 +1090,7 @@ function rezeptZuGericht(r) {
 }
 
 // Ruft den Importhelfer in Supabase auf. Liefert das fertige Gericht oder wirft eine Fehlermeldung als Text.
-async function rezeptHolen(adresse) {
+async function rezeptHolen(adresse, personen) {
   if (!sb || !sbSitzung) throw new Error("Für den Import musst du angemeldet sein (Wolken-Knopf oben).");
   let antwort;
   try {
@@ -1098,19 +1115,23 @@ async function rezeptHolen(adresse) {
       r.bildNeu = await bildVerkleinern(new File([blob], "rezept.jpg", { type: blob.type || "image/jpeg" }));
     } catch (e) { r.bildNeu = null; }
   }
-  return rezeptZuGericht(r);
+  return rezeptZuGericht(r, personen);
 }
 
 function importKarte(beiErfolg) {
   const feld = el("input", { type: "url", class: "eingabe", placeholder: "https://…", autocomplete: "off", autocapitalize: "off", inputmode: "url" });
   const meldung = el("p", { class: "leise", hidden: true });
+  const personen = el("select", { class: "eingabe", "aria-label": "Für wie viele Personen" },
+    [1, 2, 3, 4, 5, 6, 7, 8].map(function (n) { return el("option", { value: String(n), text: n === 1 ? "1 Person" : n + " Personen" }); }));
+  personen.value = String(importPersonenLesen());
   const knopf = el("button", { class: "knopf knopf-sekundaer", type: "button", style: "width: 100%", text: "Importieren" });
   knopf.addEventListener("click", async function () {
     const adresse = feld.value.trim();
     if (!adresse) { meldung.textContent = "Bitte füge zuerst einen Link ein."; meldung.hidden = false; return; }
     knopf.disabled = true; knopf.textContent = "Lade Rezept …"; meldung.hidden = true;
     try {
-      beiErfolg(await rezeptHolen(adresse));
+      try { localStorage.setItem("essensplan-import-personen", personen.value); } catch (e) {}
+      beiErfolg(await rezeptHolen(adresse, Number(personen.value)));
     } catch (f) {
       meldung.textContent = f.message; meldung.hidden = false;
       knopf.disabled = false; knopf.textContent = "Importieren";
@@ -1119,7 +1140,9 @@ function importKarte(beiErfolg) {
   return el("div", { class: "karte import-karte" },
     el("h3", { class: "abschnitt", style: "margin-top: 0", text: "Rezept aus Link importieren" }),
     el("p", { class: "leise", text: "Link einer Rezeptseite einfügen. Titel, Zutaten, Anleitung (unter Notizen), Nährwerte und Foto werden übernommen." }),
-    feld, el("div", { style: "height: 8px" }), knopf, meldung
+    feld,
+    el("label", { class: "feld", style: "margin-top: 10px" }, el("span", { text: "Kochen für (Mengen werden umgerechnet)" }), personen),
+    knopf, meldung
   );
 }
 
@@ -1527,18 +1550,6 @@ const EINHEITEN_UMRECHNUNG = { g: ["g", 1], kg: ["g", 1000], ml: ["ml", 1], l: [
 
 // Zählt die Zutaten aller für die Woche geplanten Gerichte zusammen.
 // Ein Gericht, das an mehreren Tagen geplant ist, zählt entsprechend mehrfach.
-// Für wie viele Personen gekocht wird (gilt für die Einkaufsliste; pro Gerät in den Einstellungen).
-function personenLesen() {
-  try {
-    const n = Number(localStorage.getItem("essensplan-personen"));
-    if (Number.isInteger(n) && n >= 1 && n <= 12) return n;
-  } catch (e) {}
-  return 2;
-}
-function personenSpeichern(n) {
-  try { localStorage.setItem("essensplan-personen", String(n)); } catch (e) {}
-}
-
 function einkaufslisteBerechnen(montag) {
   const plan = plaene.get(datumSchluessel(montag));
   const posten = new Map();
@@ -1548,8 +1559,6 @@ function einkaufslisteBerechnen(montag) {
     const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
     if (!g) return;
     anzahlGerichte++;
-    // Mengen auf die eingestellte Personenzahl umrechnen (Gericht mit 4 Portionen, Kochen für 2 -> halbe Menge).
-    const faktor = g.portionen > 0 ? personenLesen() / g.portionen : 1;
     g.zutaten.forEach(function (z) {
       const name = z.name.trim();
       const hatMenge = z.menge !== null && z.menge !== undefined;
@@ -1557,7 +1566,7 @@ function einkaufslisteBerechnen(montag) {
       const gruppe = hatMenge ? (umrechnung ? umrechnung[0] : z.einheit) : "";
       const schluessel = name.toLowerCase() + "|" + gruppe;
       if (!posten.has(schluessel)) posten.set(schluessel, { schluessel: schluessel, name: name, gruppe: gruppe, summe: 0 });
-      if (hatMenge) posten.get(schluessel).summe += z.menge * faktor * (umrechnung ? umrechnung[1] : 1);
+      if (hatMenge) posten.get(schluessel).summe += z.menge * (umrechnung ? umrechnung[1] : 1);
     });
   });
 
@@ -2550,23 +2559,13 @@ function einstellungenOeffnen() {
     }));
   }
   zeichnen();
-  const personenWahl = el("select", { class: "eingabe", "aria-label": "Personenzahl" },
-    [1, 2, 3, 4, 5, 6, 7, 8].map(function (n) { return el("option", { value: String(n), text: n === 1 ? "1 Person" : n + " Personen" }); }));
-  personenWahl.value = String(personenLesen());
-  personenWahl.addEventListener("change", function () {
-    personenSpeichern(Number(personenWahl.value));
-    if (typeof einkaufZeichnen === "function") { try { einkaufZeichnen(); } catch (e) {} }
-  });
   blattZeigen({
     titel: "Einstellungen",
     links: { text: "Schließen", aktion: blattSchliessen },
     inhalt: [
       el("h3", { class: "abschnitt", text: "Farbvariante" }),
       liste,
-      el("p", { class: "leise", style: "margin-top: 16px", text: "Die Wahl gilt nur für dieses Gerät." }),
-      el("h3", { class: "abschnitt", text: "Wir kochen für" }),
-      personenWahl,
-      el("p", { class: "leise", style: "margin-top: 8px", text: "Die Einkaufsliste rechnet jedes Gericht auf diese Personenzahl um. Auch das gilt nur für dieses Gerät." })
+      el("p", { class: "leise", style: "margin-top: 16px", text: "Die Wahl gilt nur für dieses Gerät." })
     ]
   });
 }
