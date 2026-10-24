@@ -7,7 +7,7 @@
    man angemeldet, werden die Daten zusätzlich mit den anderen Geräten abgeglichen.
    ===================================================================== */
 
-const EINHEITEN = ["g", "kg", "ml", "l", "Stück", "EL", "TL", "Packung"];
+const EINHEITEN = ["g", "kg", "ml", "l", "Stück", "EL", "TL", "Packung", "Dose", "Bund", "Prise"];
 
 /* ---------- Datenbank ---------- */
 
@@ -968,6 +968,7 @@ function formularOeffnen(gericht) {
     links: { text: "Abbrechen", aktion: zurueck },
     rechts: { text: "Speichern", aktion: speichern },
     inhalt: [
+      neu ? importKarte(function (importiert) { formularOeffnen(importiert); }) : null,
       el("label", { class: "feld" }, el("span", { text: "Titel" }), titelFeld),
       el("div", { class: "feld" }, el("span", { text: "Foto (optional)" }), bildBereich, dateiFeld),
       el("label", { class: "feld" }, el("span", { text: "Anzahl Portionen (Mengen rechnen sich automatisch um)" }), portionenFeld),
@@ -983,7 +984,143 @@ function formularOeffnen(gericht) {
       el("button", { class: "knopf knopf-primaer", type: "button", style: "width: 100%", onclick: speichern, text: "Speichern" })
     ]
   });
-  if (neu) titelFeld.focus();
+  if (neu && !g.titel) titelFeld.focus();
+}
+
+/* ---------- Rezept aus einem Link importieren ---------- */
+
+const IMPORT_EINHEITEN = {
+  g: "g", gr: "g", gramm: "g", kg: "kg", ml: "ml", l: "l", liter: "l",
+  el: "EL", esslöffel: "EL", tl: "TL", teelöffel: "TL",
+  dose: "Dose", dosen: "Dose", bund: "Bund", prise: "Prise", prisen: "Prise",
+  pck: "Packung", pkg: "Packung", päckchen: "Packung", packung: "Packung", packungen: "Packung",
+  stück: "Stück", stk: "Stück", st: "Stück"
+};
+const IMPORT_BRUCH = { "½": 0.5, "¼": 0.25, "¾": 0.75, "⅓": 1 / 3, "⅔": 2 / 3 };
+
+// "800 g Rinderhackfleisch" -> { name: "Rinderhackfleisch", menge: 800, einheit: "g", hinweis: "" }
+function zutatZerlegen(zeile) {
+  let t = String(zeile).replace(/\s+/g, " ").trim();
+  const hinweise = [];
+  t = t.replace(/\(([^)]*)\)/g, function (_, h) { if (h.trim()) hinweise.push(h.trim()); return " "; });
+  t = t.replace(/\s*Abtropfgewicht.*$/i, function (m) { hinweise.push(m.trim()); return ""; });
+  t = t.replace(/^(ca\.?|etwa|circa)\s+/i, "").replace(/\s+/g, " ").trim();
+  let menge = null;
+  let m = t.match(/^(\d+)\s*([½¼¾⅓⅔])/) || t.match(/^()([½¼¾⅓⅔])/);
+  if (m) {
+    menge = (m[1] ? Number(m[1]) : 0) + IMPORT_BRUCH[m[2]];
+    t = t.slice(m[0].length).trim();
+  } else if ((m = t.match(/^(\d+)\s+(\d+)\/(\d+)(?=\s|$)/))) {
+    menge = Number(m[1]) + Number(m[2]) / Number(m[3]);
+    t = t.slice(m[0].length).trim();
+  } else if ((m = t.match(/^(\d+)\/(\d+)(?=\s|$)/))) {
+    menge = Number(m[1]) / Number(m[2]);
+    t = t.slice(m[0].length).trim();
+  } else if ((m = t.match(/^(\d+(?:[.,]\d+)?)(?:\s*[-–]\s*\d+(?:[.,]\d+)?)?/))) {
+    menge = Number(m[1].replace(",", "."));
+    t = t.slice(m[0].length).trim();
+  }
+  let einheit = "g";
+  if (menge !== null) {
+    einheit = "Stück";
+    const w = t.match(/^(\S+)\s*(.*)$/);
+    if (w) {
+      const schluessel = w[1].replace(/\.$/, "").toLowerCase();
+      if (IMPORT_EINHEITEN[schluessel]) { einheit = IMPORT_EINHEITEN[schluessel]; t = w[2]; }
+    }
+  }
+  t = t.replace(/\s+(Dose|Packung|Glas)$/i, function (_, w) { hinweise.push(w); return ""; });
+  const name = t.replace(/^(von|vom)\s+/i, "").replace(/^[-–,\s]+|[,\s]+$/g, "").trim() || String(zeile).trim();
+  return { name: name, menge: menge === null ? null : Math.round(menge * 100) / 100, einheit: einheit, hinweis: hinweise.join(", ") };
+}
+
+// Macht aus der Antwort des Importhelfers ein Gericht, das im Formular geöffnet werden kann.
+function rezeptZuGericht(r) {
+  const zutaten = [];
+  const hinweise = [];
+  (r.zutaten || []).forEach(function (zeile) {
+    const z = zutatZerlegen(zeile);
+    zutaten.push({ name: z.name, menge: z.menge, einheit: z.einheit });
+    if (z.hinweis) hinweise.push("- " + z.name + ": " + z.hinweis);
+  });
+  const teile = [];
+  const zeit = r.zeiten || {};
+  const zeiten = [];
+  if (zeit.vorbereiten) zeiten.push("Zubereitung " + zeit.vorbereiten + " Min");
+  if (zeit.kochen) zeiten.push("Kochen " + zeit.kochen + " Min");
+  if (zeit.gesamt) zeiten.push("Gesamt " + zeit.gesamt + " Min");
+  if (zeiten.length) teile.push(zeiten.join(" · "));
+  if ((r.schritte || []).length) {
+    let nr = 0;
+    teile.push(r.schritte.map(function (st) {
+      if (st.indexOf("## ") === 0) return st.slice(3) + ":";
+      nr++;
+      return nr + ". " + st;
+    }).join("\n"));
+  }
+  if (hinweise.length) teile.push("Hinweise zu Zutaten:\n" + hinweise.join("\n"));
+  if (r.quelle) teile.push("Quelle: " + r.quelle);
+  const n = r.naehrwerte || {};
+  return {
+    titel: String(r.titel || "").slice(0, 80),
+    bild: r.bildNeu || null,
+    portionen: r.portionen && r.portionen > 0 ? r.portionen : 2,
+    zutaten: zutaten.length ? zutaten : [{ name: "", menge: null, einheit: "g" }],
+    naehrwerte: { kcal: n.kcal === undefined ? null : n.kcal, eiweiss: n.eiweiss === undefined ? null : n.eiweiss,
+      kohlenhydrate: n.kohlenhydrate === undefined ? null : n.kohlenhydrate, fett: n.fett === undefined ? null : n.fett },
+    notizen: teile.join("\n\n")
+  };
+}
+
+// Ruft den Importhelfer in Supabase auf. Liefert das fertige Gericht oder wirft eine Fehlermeldung als Text.
+async function rezeptHolen(adresse) {
+  if (!sb || !sbSitzung) throw new Error("Für den Import musst du angemeldet sein (Wolken-Knopf oben).");
+  let antwort;
+  try {
+    antwort = await sb.functions.invoke("rezept-import", { body: { url: adresse } });
+  } catch (f) {
+    throw new Error("Der Import hat keine Verbindung bekommen. Bist du online?");
+  }
+  if (antwort.error) {
+    let code = "";
+    try { code = (await antwort.error.context.json()).fehler; } catch (e) {}
+    if (code === "kein-rezept") throw new Error("Auf dieser Seite habe ich kein Rezept gefunden. Du kannst das Gericht von Hand anlegen.");
+    if (code === "adresse") throw new Error("Das ist keine gültige Internetadresse.");
+    if (code === "abruf") throw new Error("Die Seite konnte nicht geladen werden (vielleicht blockiert sie den Abruf).");
+    if (code === "anmelden") throw new Error("Bitte melde dich neu an (Wolken-Knopf oben).");
+    throw new Error("Der Import hat leider nicht geklappt.");
+  }
+  const r = antwort.data && antwort.data.rezept;
+  if (!r) throw new Error("Der Import hat leider nicht geklappt.");
+  if (r.bild) {
+    try {
+      const blob = await (await fetch(r.bild)).blob();
+      r.bildNeu = await bildVerkleinern(new File([blob], "rezept.jpg", { type: blob.type || "image/jpeg" }));
+    } catch (e) { r.bildNeu = null; }
+  }
+  return rezeptZuGericht(r);
+}
+
+function importKarte(beiErfolg) {
+  const feld = el("input", { type: "url", class: "eingabe", placeholder: "https://…", autocomplete: "off", autocapitalize: "off", inputmode: "url" });
+  const meldung = el("p", { class: "leise", hidden: true });
+  const knopf = el("button", { class: "knopf knopf-sekundaer", type: "button", style: "width: 100%", text: "Importieren" });
+  knopf.addEventListener("click", async function () {
+    const adresse = feld.value.trim();
+    if (!adresse) { meldung.textContent = "Bitte füge zuerst einen Link ein."; meldung.hidden = false; return; }
+    knopf.disabled = true; knopf.textContent = "Lade Rezept …"; meldung.hidden = true;
+    try {
+      beiErfolg(await rezeptHolen(adresse));
+    } catch (f) {
+      meldung.textContent = f.message; meldung.hidden = false;
+      knopf.disabled = false; knopf.textContent = "Importieren";
+    }
+  });
+  return el("div", { class: "karte import-karte" },
+    el("h3", { class: "abschnitt", style: "margin-top: 0", text: "Rezept aus Link importieren" }),
+    el("p", { class: "leise", text: "Link einer Rezeptseite einfügen. Titel, Zutaten, Anleitung (unter Notizen), Nährwerte und Foto werden übernommen." }),
+    feld, el("div", { style: "height: 8px" }), knopf, meldung
+  );
 }
 
 /* ---------- Wochenplaner ---------- */
