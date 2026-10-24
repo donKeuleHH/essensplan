@@ -1137,13 +1137,25 @@ function importKarte(beiErfolg) {
       knopf.disabled = false; knopf.textContent = "Importieren";
     }
   });
-  return el("div", { class: "karte import-karte" },
-    el("h3", { class: "abschnitt", style: "margin-top: 0", text: "Rezept aus Link importieren" }),
+  const inhalt = el("div", { class: "import-inhalt", hidden: true },
     el("p", { class: "leise", text: "Link einer Rezeptseite einfügen. Titel, Zutaten, Anleitung (unter Notizen), Nährwerte und Foto werden übernommen." }),
     feld,
     el("label", { class: "feld", style: "margin-top: 10px" }, el("span", { text: "Kochen für (Mengen werden umgerechnet)" }), personen),
     knopf, meldung
   );
+  const kopf = el("button", { class: "import-kopf", type: "button", "aria-expanded": "false" },
+    el("span", { class: "import-titel", text: "🔗 Rezept aus Link importieren" }),
+    el("span", { class: "import-pfeil", text: "›" })
+  );
+  const huelle = el("div", { class: "karte import-karte" }, kopf, inhalt);
+  kopf.addEventListener("click", function () {
+    const offen = inhalt.hidden;
+    inhalt.hidden = !offen;
+    huelle.classList.toggle("offen", offen);
+    kopf.setAttribute("aria-expanded", offen ? "true" : "false");
+    if (offen) feld.focus();
+  });
+  return huelle;
 }
 
 /* ---------- Wochenplaner ---------- */

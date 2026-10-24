@@ -747,3 +747,10 @@ main { touch-action: pan-y; }
 .auswaerts-kreis svg { width: 26px; height: 26px; }
 .auswaerts-wahl { display: flex; align-items: center; gap: 14px; width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; margin: 14px 0 18px; padding: 12px 14px; }
 .auswaerts-wahl.aktiv { outline: 2px solid var(--akzent); }
+
+/* Import-Karte zum Aufklappen */
+.import-karte { padding: 0; overflow: hidden; }
+.import-kopf { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 14px 18px; font: inherit; font-weight: 600; color: var(--akzent); background: none; border: 0; text-align: left; cursor: pointer; }
+.import-pfeil { font-size: 1.5rem; line-height: 1; color: var(--text-leise); transition: transform 0.2s; }
+.import-karte.offen .import-pfeil { transform: rotate(90deg); }
+.import-inhalt { padding: 0 18px 18px; }
