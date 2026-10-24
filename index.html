@@ -28,19 +28,6 @@
   <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="stylesheet" href="style.css">
   <script>
-    // iOS-Web-App: Mit durchsichtiger Statusleiste meldet iOS eine zu kleine Fensterhöhe,
-    // unten bliebe ein schwarzer Streifen. Darum die echte Bildschirmhöhe setzen.
-    (function () {
-      if (!navigator.standalone) return;
-      function hoeheSetzen() {
-        var quer = window.innerWidth > window.innerHeight;
-        var h = quer ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
-        document.documentElement.style.setProperty("--vollhoehe", h + "px");
-      }
-      hoeheSetzen();
-      window.addEventListener("resize", hoeheSetzen);
-      window.addEventListener("orientationchange", function () { setTimeout(hoeheSetzen, 300); });
-    })();
     // Gewählte Farbvariante sofort setzen, damit beim Start nichts aufblitzt.
     try {
       var s = localStorage.getItem("essensplan-skin");
