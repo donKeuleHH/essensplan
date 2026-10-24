@@ -1626,7 +1626,7 @@ function einkaufZeichnen() {
   const offen = alle.filter(function (x) { return !x.erledigt; });
   const erledigt = alle.filter(function (x) { return x.erledigt; });
 
-  const hatteFokus = document.activeElement && document.activeElement.id === "extra-name";
+  const hatteFokus = extraOffen && document.activeElement && document.activeElement.id === "extra-name";
   const teile = wochenKopf();
   teile.push(extraEingabe(woche));
 
@@ -1710,6 +1710,8 @@ function extraMengenSummieren(alt, neu) {
   return alt + " + " + neu;
 }
 
+let extraOffen = false; // Eingabe unter "Artikel hinzufügen" aufgeklappt?
+
 // Eingabezeile für eigene Artikel (Name, optionale Menge) mit Vorschlägen aus früheren Einträgen.
 function extraEingabe(woche) {
   const name = el("input", {
@@ -1722,13 +1724,27 @@ function extraEingabe(woche) {
   });
   name.addEventListener("input", function () { extraEntwurf.name = name.value; });
   menge.addEventListener("input", function () { extraEntwurf.menge = menge.value; });
-  return el("form", {
+  const formular = el("form", {
     class: "extra-form",
+    hidden: !extraOffen,
     onsubmit: function (e) { e.preventDefault(); extraHinzufuegen(woche, name.value, menge.value); }
   },
     name, menge,
     el("button", { class: "knopf knopf-primaer extra-plus", type: "submit", "aria-label": "Zur Liste hinzufügen", text: "+" })
   );
+  const kopf = el("button", { class: "import-kopf", type: "button", "aria-expanded": extraOffen ? "true" : "false" },
+    el("span", { class: "import-titel", text: "+ Artikel hinzufügen" }),
+    el("span", { class: "import-pfeil", text: "›" })
+  );
+  const huelle = el("div", { class: "karte import-karte extra-karte" + (extraOffen ? " offen" : "") }, kopf, formular);
+  kopf.addEventListener("click", function () {
+    extraOffen = !extraOffen;
+    formular.hidden = !extraOffen;
+    huelle.classList.toggle("offen", extraOffen);
+    kopf.setAttribute("aria-expanded", extraOffen ? "true" : "false");
+    if (extraOffen) name.focus();
+  });
+  return huelle;
 }
 
 function extraZeile(e) {

@@ -754,3 +754,6 @@ main { touch-action: pan-y; }
 .import-pfeil { font-size: 1.5rem; line-height: 1; color: var(--text-leise); transition: transform 0.2s; }
 .import-karte.offen .import-pfeil { transform: rotate(90deg); }
 .import-inhalt { padding: 0 18px 18px; }
+
+.extra-karte .extra-form { margin: 0; padding: 0 18px 18px; }
+.extra-form[hidden] { display: none; }
