@@ -1527,6 +1527,18 @@ const EINHEITEN_UMRECHNUNG = { g: ["g", 1], kg: ["g", 1000], ml: ["ml", 1], l: [
 
 // Zählt die Zutaten aller für die Woche geplanten Gerichte zusammen.
 // Ein Gericht, das an mehreren Tagen geplant ist, zählt entsprechend mehrfach.
+// Für wie viele Personen gekocht wird (gilt für die Einkaufsliste; pro Gerät in den Einstellungen).
+function personenLesen() {
+  try {
+    const n = Number(localStorage.getItem("essensplan-personen"));
+    if (Number.isInteger(n) && n >= 1 && n <= 12) return n;
+  } catch (e) {}
+  return 2;
+}
+function personenSpeichern(n) {
+  try { localStorage.setItem("essensplan-personen", String(n)); } catch (e) {}
+}
+
 function einkaufslisteBerechnen(montag) {
   const plan = plaene.get(datumSchluessel(montag));
   const posten = new Map();
@@ -1536,6 +1548,8 @@ function einkaufslisteBerechnen(montag) {
     const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
     if (!g) return;
     anzahlGerichte++;
+    // Mengen auf die eingestellte Personenzahl umrechnen (Gericht mit 4 Portionen, Kochen für 2 -> halbe Menge).
+    const faktor = g.portionen > 0 ? personenLesen() / g.portionen : 1;
     g.zutaten.forEach(function (z) {
       const name = z.name.trim();
       const hatMenge = z.menge !== null && z.menge !== undefined;
@@ -1543,7 +1557,7 @@ function einkaufslisteBerechnen(montag) {
       const gruppe = hatMenge ? (umrechnung ? umrechnung[0] : z.einheit) : "";
       const schluessel = name.toLowerCase() + "|" + gruppe;
       if (!posten.has(schluessel)) posten.set(schluessel, { schluessel: schluessel, name: name, gruppe: gruppe, summe: 0 });
-      if (hatMenge) posten.get(schluessel).summe += z.menge * (umrechnung ? umrechnung[1] : 1);
+      if (hatMenge) posten.get(schluessel).summe += z.menge * faktor * (umrechnung ? umrechnung[1] : 1);
     });
   });
 
@@ -2536,13 +2550,23 @@ function einstellungenOeffnen() {
     }));
   }
   zeichnen();
+  const personenWahl = el("select", { class: "eingabe", "aria-label": "Personenzahl" },
+    [1, 2, 3, 4, 5, 6, 7, 8].map(function (n) { return el("option", { value: String(n), text: n === 1 ? "1 Person" : n + " Personen" }); }));
+  personenWahl.value = String(personenLesen());
+  personenWahl.addEventListener("change", function () {
+    personenSpeichern(Number(personenWahl.value));
+    if (typeof einkaufZeichnen === "function") { try { einkaufZeichnen(); } catch (e) {} }
+  });
   blattZeigen({
     titel: "Einstellungen",
     links: { text: "Schließen", aktion: blattSchliessen },
     inhalt: [
       el("h3", { class: "abschnitt", text: "Farbvariante" }),
       liste,
-      el("p", { class: "leise", style: "margin-top: 16px", text: "Die Wahl gilt nur für dieses Gerät." })
+      el("p", { class: "leise", style: "margin-top: 16px", text: "Die Wahl gilt nur für dieses Gerät." }),
+      el("h3", { class: "abschnitt", text: "Wir kochen für" }),
+      personenWahl,
+      el("p", { class: "leise", style: "margin-top: 8px", text: "Die Einkaufsliste rechnet jedes Gericht auf diese Personenzahl um. Auch das gilt nur für dieses Gerät." })
     ]
   });
 }
