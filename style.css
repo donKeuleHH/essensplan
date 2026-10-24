@@ -745,5 +745,5 @@ main { touch-action: pan-y; }
 /* Auswärts essen */
 .auswaerts-kreis { display: grid; place-items: center; flex: none; color: var(--akzent); background: var(--akzent-schwach); }
 .auswaerts-kreis svg { width: 26px; height: 26px; }
-.auswaerts-wahl { display: flex; align-items: center; gap: 14px; width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; margin: 14px 0 0; padding: 12px 14px; }
+.auswaerts-wahl { display: flex; align-items: center; gap: 14px; width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; margin: 14px 0 18px; padding: 12px 14px; }
 .auswaerts-wahl.aktiv { outline: 2px solid var(--akzent); }
