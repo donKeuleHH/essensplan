@@ -1121,13 +1121,18 @@ function wochenKopf() {
     ),
     el("button", { class: "pfeil", type: "button", "aria-label": "Nächste Woche", onclick: function () { wocheWechseln(1); }, text: "›" })
   )];
+  const aktionen = el("div", { class: "woche-aktionen" });
   if (datumSchluessel(montag) !== datumSchluessel(standard)) {
-    teile.push(el("button", {
-      class: "textknopf zurueck", type: "button",
+    aktionen.append(el("button", {
+      class: "textknopf", type: "button",
       onclick: function () { angezeigteWoche = standardWoche(); wochenAnsichtenZeichnen(); },
       text: "Zu KW " + kalenderwoche(standard)
     }));
   }
+  aktionen.append(el("button", {
+    class: "textknopf", type: "button", onclick: function () { planTeilenOeffnen(); }
+  }, teilenIconKnoten(), " Plan teilen"));
+  teile.push(aktionen);
   return teile;
 }
 
@@ -1703,6 +1708,240 @@ async function einkaufTeilen(montag, offene, eigeneOffen) {
   } catch (fehler) {
     if (!fehler || fehler.name !== "AbortError") alert("Das Teilen hat leider nicht geklappt.");
   }
+}
+
+/* ---------- Wochenplan als Bild teilen ---------- */
+
+const TEILEN_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
+
+function teilenIconKnoten() {
+  const e = el("span", { class: "teilen-icon" });
+  e.innerHTML = TEILEN_ICON;
+  return e;
+}
+
+function kreisFarbe(titel) {
+  let h = 0;
+  for (let i = 0; i < titel.length; i++) h = (h * 31 + titel.charCodeAt(i)) >>> 0;
+  return KREIS_FARBEN[h % KREIS_FARBEN.length];
+}
+
+function bildLaden(src) {
+  return new Promise(function (ok) {
+    const b = new Image();
+    b.onload = function () { ok(b); };
+    b.onerror = function () { ok(null); };
+    b.src = src;
+  });
+}
+
+function rundRechteck(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+function textKuerzen(c, text, breite, maxZeilen) {
+  const woerter = text.split(" ");
+  const zeilen = [];
+  let zeile = "";
+  for (let i = 0; i < woerter.length; i++) {
+    const probe = zeile ? zeile + " " + woerter[i] : woerter[i];
+    if (c.measureText(probe).width <= breite || !zeile) { zeile = probe; }
+    else { zeilen.push(zeile); zeile = woerter[i]; }
+  }
+  zeilen.push(zeile);
+  if (zeilen.length > maxZeilen) {
+    const rest = zeilen.slice(maxZeilen - 1).join(" ");
+    zeilen.length = maxZeilen - 1;
+    let k = rest;
+    while (k.length > 1 && c.measureText(k + "…").width > breite) k = k.slice(0, -1);
+    zeilen.push(k + "…");
+  }
+  return zeilen;
+}
+
+function sportIconZeichnen(c, mx, my, groesse, farbe) {
+  c.save();
+  c.translate(mx - groesse / 2, my - groesse / 2);
+  c.scale(groesse / 24, groesse / 24);
+  c.strokeStyle = farbe;
+  c.lineWidth = 2.4;
+  c.lineCap = "round";
+  c.lineJoin = "round";
+  c.stroke(new Path2D("M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"));
+  c.restore();
+}
+
+// Malt den Wochenplan im aktuell gewählten Farbstil und liefert ein PNG.
+async function planBildErzeugen(montag) {
+  const plan = plaene.get(datumSchluessel(montag));
+  const sport = sportTage(plan);
+  const stil = getComputedStyle(document.documentElement);
+  const farbe = function (name, ersatz) { return stil.getPropertyValue(name).trim() || ersatz; };
+  const BG = farbe("--bg", "#2a313c"), KARTE = farbe("--karte", "#323a47"), AKZENT = farbe("--akzent", "#f5b73c");
+  const TEXT = farbe("--text", "#eef1f5"), LEISE = farbe("--text-leise", "#9aa5b5");
+  const SPORT = farbe("--sport", "#4f9fe3"), AUF_SPORT = farbe("--auf-sport", "#ffffff");
+  const SCHRIFT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+  const eintraege = [];
+  for (let i = 0; i < 5; i++) {
+    const id = plan ? plan.tage[i] : null;
+    const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
+    eintraege.push({ g: g || null, foto: g && g.bild ? await bildLaden(g.bild) : null });
+  }
+  const hatSport = sport.some(function (x) { return x; });
+
+  const B = 1080, RAND = 60, KH = 196, LUECKE = 24;
+  const H = 68 + 130 + 5 * KH + 4 * LUECKE + (hatSport ? 110 : 60);
+  const cv = document.createElement("canvas");
+  cv.width = B; cv.height = H;
+  const c = cv.getContext("2d");
+  c.fillStyle = BG; c.fillRect(0, 0, B, H);
+  c.textBaseline = "alphabetic";
+
+  // Kopf: Logo links, Kalenderwoche rechts
+  const freitag = tagVerschieben(montag, 4);
+  c.fillStyle = AKZENT;
+  c.save(); c.translate(RAND, 96); c.scale(2.2, 2.2);
+  c.fill(new Path2D("M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5 2.5 2.5 0 0 1 12 11.5z"));
+  c.restore();
+  c.font = "800 52px " + SCHRIFT;
+  c.fillStyle = TEXT; c.textAlign = "left";
+  c.fillText("Meal", RAND + 64, 134);
+  const wMeal = c.measureText("Meal").width;
+  c.fillStyle = AKZENT;
+  c.fillText("Map", RAND + 64 + wMeal, 134);
+  c.textAlign = "right";
+  c.fillStyle = TEXT; c.font = "800 60px " + SCHRIFT;
+  c.fillText("KW " + kalenderwoche(montag), B - RAND, 120);
+  c.fillStyle = LEISE; c.font = "400 30px " + SCHRIFT;
+  c.fillText(kurzDatum(montag) + " – " + kurzDatum(freitag) + freitag.getFullYear(), B - RAND, 164);
+
+  // Tageskarten
+  let y = 68 + 130;
+  for (let i = 0; i < 5; i++) {
+    const e = eintraege[i], g = e.g;
+    const x = RAND, w = B - 2 * RAND, FOTO = 156, ix = x + 20, iy = y + (KH - FOTO) / 2;
+    if (g) {
+      c.fillStyle = KARTE; rundRechteck(c, x, y, w, KH, 40); c.fill();
+    } else {
+      c.save(); c.setLineDash([14, 12]); c.lineWidth = 3; c.strokeStyle = LEISE; c.globalAlpha = 0.55;
+      rundRechteck(c, x + 1.5, y + 1.5, w - 3, KH - 3, 40); c.stroke(); c.restore();
+    }
+    // Foto oder Ring
+    c.save();
+    rundRechteck(c, ix, iy, FOTO, FOTO, 32); c.clip();
+    if (g && e.foto) {
+      const f = Math.max(FOTO / e.foto.width, FOTO / e.foto.height);
+      c.drawImage(e.foto, ix + (FOTO - e.foto.width * f) / 2, iy + (FOTO - e.foto.height * f) / 2, e.foto.width * f, e.foto.height * f);
+    } else if (g) {
+      const f = kreisFarbe(g.titel);
+      c.fillStyle = f[0]; c.fillRect(ix, iy, FOTO, FOTO);
+      c.strokeStyle = f[1]; c.lineWidth = 34; c.beginPath(); c.arc(ix + FOTO / 2, iy + FOTO / 2, 62, 0, Math.PI * 2); c.stroke();
+    } else {
+      c.globalAlpha = 0.4; c.strokeStyle = AKZENT; c.lineWidth = 14;
+      c.beginPath(); c.arc(ix + FOTO / 2, iy + FOTO / 2, 66, 0, Math.PI * 2); c.stroke();
+    }
+    c.restore();
+    if (!g) {
+      c.fillStyle = LEISE; c.globalAlpha = 0.6; c.textAlign = "center"; c.font = "800 52px " + SCHRIFT;
+      c.fillText("?", ix + FOTO / 2, iy + FOTO / 2 + 18); c.globalAlpha = 1;
+    }
+    // Texte
+    const tx = ix + FOTO + 32, tb = x + w - 40 - tx - (g && sport[i] ? 104 : 0);
+    c.textAlign = "left";
+    c.font = "700 41px " + SCHRIFT;
+    const zweiZeilig = g ? textKuerzen(c, g.titel, tb, 2).length === 2 : false;
+    c.font = "700 27px " + SCHRIFT;
+    if ("letterSpacing" in c) c.letterSpacing = "3px";
+    c.fillStyle = g ? AKZENT : LEISE;
+    c.fillText(TAGNAMEN[i].toUpperCase(), tx, y + (zweiZeilig ? 52 : 58));
+    if ("letterSpacing" in c) c.letterSpacing = "0px";
+    c.fillStyle = g ? TEXT : LEISE;
+    if (g) {
+      c.font = "700 41px " + SCHRIFT;
+      let zeilen = textKuerzen(c, g.titel, tb, 2);
+      if (zeilen.length === 2) { c.font = "700 36px " + SCHRIFT; zeilen = textKuerzen(c, g.titel, tb, 2); }
+      const meta = [zahlText(g.portionen) + " " + pluralPortionen(g.portionen)];
+      if (KH_TEXT[g.khStufe]) meta.push(KH_TEXT[g.khStufe]);
+      if (ERN_TEXT[g.ernaehrung]) meta.push(ERN_TEXT[g.ernaehrung]);
+      const zwei = zeilen.length === 2;
+      zeilen.forEach(function (z, k) { c.fillText(z, tx, y + (zwei ? 98 : 112) + k * 42); });
+      c.font = "400 27px " + SCHRIFT; c.fillStyle = LEISE;
+      c.fillText(textKuerzen(c, meta.join(" · "), tb, 1)[0], tx, y + (zwei ? 174 : 160));
+    } else {
+      c.font = "500 36px " + SCHRIFT;
+      c.fillText("Noch offen", tx, y + 114);
+    }
+    // Sport-Badge
+    if (g && sport[i]) {
+      const bx = x + w - 40 - 38, by = y + KH / 2;
+      c.fillStyle = SPORT; c.beginPath(); c.arc(bx, by, 38, 0, Math.PI * 2); c.fill();
+      sportIconZeichnen(c, bx, by, 40, AUF_SPORT);
+    }
+    y += KH + LUECKE;
+  }
+
+  // Legende
+  if (hatSport) {
+    const my = y + 24;
+    c.font = "400 28px " + SCHRIFT;
+    const tw = c.measureText("Sporttag").width, gesamt = 44 + 14 + tw, sx = (B - gesamt) / 2;
+    c.fillStyle = SPORT; c.beginPath(); c.arc(sx + 22, my, 22, 0, Math.PI * 2); c.fill();
+    sportIconZeichnen(c, sx + 22, my, 24, AUF_SPORT);
+    c.fillStyle = LEISE; c.textAlign = "left"; c.fillText("Sporttag", sx + 44 + 14, my + 10);
+  }
+  return new Promise(function (ok) { cv.toBlob(ok, "image/png"); });
+}
+
+function planTeilenText(montag) {
+  const diff = Math.round((montag - standardWoche()) / (7 * 24 * 3600 * 1000));
+  if (diff === 1) return "Das essen wir nächste Woche 🍽️";
+  if (diff === 0) return "Das essen wir diese Woche 🍽️";
+  return "Das essen wir in KW " + kalenderwoche(montag) + " 🍽️";
+}
+
+async function planTeilenOeffnen() {
+  const montag = angezeigteWoche;
+  const vorschau = el("img", { class: "plan-vorschau", alt: "Wochenplan als Bild" });
+  const nachricht = el("textarea", { class: "plan-text", rows: "2" });
+  nachricht.value = planTeilenText(montag);
+  let blob = null;
+  let url = null;
+  function zu() { if (url) URL.revokeObjectURL(url); blattSchliessen(); }
+  async function teilen() {
+    if (!blob) return;
+    const datei = new File([blob], "MealMap-KW" + kalenderwoche(montag) + ".png", { type: "image/png" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [datei] })) {
+        await navigator.share({ files: [datei], text: nachricht.value });
+      } else if (navigator.share) {
+        await navigator.share({ title: "MealMap", text: nachricht.value });
+      } else {
+        alert("Teilen wird auf diesem Gerät nicht unterstützt.");
+      }
+    } catch (fehler) {
+      if (!fehler || fehler.name !== "AbortError") alert("Das Teilen hat leider nicht geklappt.");
+    }
+  }
+  blattZeigen({
+    titel: "Plan teilen",
+    links: { text: "Schließen", aktion: zu },
+    rechts: { text: "Teilen", aktion: teilen },
+    inhalt: [
+      el("div", { class: "plan-vorschau-huelle" }, vorschau),
+      el("label", { class: "plan-label", text: "Nachricht dazu" }),
+      nachricht
+    ]
+  });
+  blob = await planBildErzeugen(montag);
+  url = URL.createObjectURL(blob);
+  vorschau.src = url;
 }
 
 /* ---------- Zutaten-Vorschläge ---------- */

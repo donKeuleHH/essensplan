@@ -352,7 +352,13 @@ nav button.aktiv { color: var(--akzent); background: var(--karte-hell); font-wei
 .woche-titel { text-align: center; }
 .woche-kw { font-size: 1.3rem; font-weight: 700; }
 .woche-datum { margin-top: 2px; font-size: 0.85rem; color: var(--text-leise); }
-.zurueck { display: block; margin: -4px auto 10px; }
+.woche-aktionen { display: flex; justify-content: center; align-items: center; gap: 22px; margin: -4px auto 10px; }
+.woche-aktionen .textknopf { display: inline-flex; align-items: center; gap: 6px; }
+.teilen-icon { display: inline-flex; }
+.plan-vorschau-huelle { border-radius: 16px; overflow: hidden; background: var(--karte); min-height: 120px; }
+.plan-vorschau { display: block; width: 100%; height: auto; }
+.plan-label { display: block; margin: 16px 0 6px; font-size: 0.85rem; color: var(--text-leise); }
+.plan-text { width: 100%; font: inherit; font-size: 16px; color: var(--text); background: var(--karte); border: 1px solid var(--linie); border-radius: 14px; padding: 12px; resize: none; user-select: text; -webkit-user-select: text; }
 
 .tag {
   display: flex;
