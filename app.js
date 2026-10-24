@@ -1805,6 +1805,7 @@ async function extraHinzufuegen(woche, nameText, mengeText2) {
   if (name === "") return;
   const menge = mengeText2.trim();
   extraEntwurf = { name: "", menge: "" };
+  pushMeldungVormerken(name);
   // Gibt es den Artikel in dieser Woche schon, wird nichts doppelt angelegt.
   const vorhanden = Array.from(extras.values()).find(function (e) {
     return e.woche === woche && !e.geloescht && e.name.toLowerCase() === name.toLowerCase();
@@ -2572,6 +2573,134 @@ function skinAnwenden(id) {
   try { localStorage.setItem("essensplan-skin", skin.id); } catch (e) {}
 }
 
+/* ---------- Mitteilungen (Web-Push) ---------- */
+
+const PUSH_OEFFENTLICH = "BBqOVH9t8dqqr-93XDK2IcbhE-1hnkgjM8MDiVWa0EhgUOA4jK4iM1ZCTEOZknyXvjLiwzROk4JQqWcVIpBSHqY";
+
+function pushNameLesen() {
+  try { return localStorage.getItem("essensplan-push-name") || ""; } catch (e) { return ""; }
+}
+function pushNameSpeichern(n) {
+  try { localStorage.setItem("essensplan-push-name", n); } catch (e) {}
+}
+
+function pushSchluessel() {
+  const t = PUSH_OEFFENTLICH.replace(/-/g, "+").replace(/_/g, "/");
+  const roh = atob(t + "=".repeat((4 - t.length % 4) % 4));
+  return Uint8Array.from(roh, function (c) { return c.charCodeAt(0); });
+}
+
+function pushUnterstuetzt() {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+async function pushAbo() {
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+
+async function pushAktivieren(name) {
+  const erlaubnis = await Notification.requestPermission();
+  if (erlaubnis !== "granted") throw new Error("Mitteilungen sind nicht erlaubt. Du kannst das in den iPhone-Einstellungen unter Mitteilungen, MealMap ändern.");
+  const reg = await navigator.serviceWorker.ready;
+  let abo = await reg.pushManager.getSubscription();
+  if (!abo) abo = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: pushSchluessel() });
+  const j = abo.toJSON();
+  const antwort = await sb.from("push_abos").upsert(
+    { endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, name: name },
+    { onConflict: "user_id,endpoint" }
+  );
+  if (antwort.error) throw new Error("Das Speichern der Anmeldung hat nicht geklappt.");
+  pushNameSpeichern(name);
+}
+
+async function pushDeaktivieren() {
+  const abo = await pushAbo();
+  if (!abo) return;
+  const endpoint = abo.endpoint;
+  await abo.unsubscribe();
+  if (sb && sbSitzung) await sb.from("push_abos").delete().eq("endpoint", endpoint);
+}
+
+async function pushTest() {
+  const antwort = await sb.functions.invoke("push-senden", { body: { test: true } });
+  if (antwort.error) throw new Error("Der Test hat nicht geklappt. Ist der Schlüssel in Supabase eingetragen?");
+  const d = antwort.data || {};
+  if (!d.empfaenger) throw new Error("Dieses Handy ist noch nicht angemeldet.");
+  if (!d.gesendet) throw new Error("Die Mitteilung wurde nicht zugestellt (" + (d.probleme || []).join(", ") + ").");
+}
+
+// Einstellungen: Bereich "Mitteilungen"
+function pushBereichZeichnen(box) {
+  function text(t) { return el("p", { class: "leise", style: "margin-top: 8px", text: t }); }
+  function melden(t) { meldung.textContent = t; meldung.hidden = !t; }
+  const meldung = el("p", { class: "leise", hidden: true });
+  box.replaceChildren(el("p", { class: "leise", text: "Einen Moment …" }));
+  (async function () {
+    let teile;
+    if (!pushUnterstuetzt()) {
+      teile = [text("Mitteilungen gehen nur, wenn MealMap auf dem Home-Bildschirm liegt (Teilen-Menü, „Zum Home-Bildschirm“) und das iPhone iOS 16.4 oder neuer hat.")];
+    } else if (!sb || !sbSitzung) {
+      teile = [text("Bitte melde dich zuerst an (Wolken-Knopf oben). Danach kannst du Mitteilungen einschalten.")];
+    } else {
+      let abo = null;
+      try { abo = await pushAbo(); } catch (e) {}
+      const aktiv = !!abo && Notification.permission === "granted";
+      const name = el("input", { type: "text", class: "eingabe", maxlength: "30", autocomplete: "off", autocapitalize: "words", placeholder: "Dein Name in der Mitteilung", value: pushNameLesen(), "aria-label": "Dein Name" });
+      const haupt = el("button", { class: "knopf knopf-primaer", type: "button", style: "width: 100%; margin-top: 8px", text: aktiv ? "Namen speichern" : "Mitteilungen aktivieren" });
+      haupt.addEventListener("click", async function () {
+        const n = name.value.trim();
+        if (!n) { melden("Bitte gib einen Namen ein, zum Beispiel deinen Vornamen."); return; }
+        haupt.disabled = true; melden("");
+        try { await pushAktivieren(n); pushBereichZeichnen(box); }
+        catch (f) { melden(f.message); haupt.disabled = false; }
+      });
+      teile = [
+        text(aktiv ? "Mitteilungen sind an. Du bekommst eine, wenn jemand anderes Artikel zur Einkaufsliste hinzufügt." : "Du bekommst eine Mitteilung, wenn jemand anderes Artikel zur Einkaufsliste hinzufügt. Das gilt nur für dieses Handy."),
+        el("div", { style: "height: 8px" }), name, haupt
+      ];
+      if (aktiv) {
+        const test = el("button", { class: "knopf knopf-sekundaer", type: "button", style: "width: 100%; margin-top: 8px", text: "Testmitteilung an mich" });
+        test.addEventListener("click", async function () {
+          test.disabled = true; melden("");
+          try { await pushTest(); melden("Gesendet. Sie sollte gleich auf diesem Handy erscheinen."); }
+          catch (f) { melden(f.message); }
+          test.disabled = false;
+        });
+        const aus = el("button", { class: "knopf knopf-sekundaer", type: "button", style: "width: 100%; margin-top: 8px", text: "Mitteilungen ausschalten" });
+        aus.addEventListener("click", async function () {
+          aus.disabled = true;
+          try { await pushDeaktivieren(); } catch (f) {}
+          pushBereichZeichnen(box);
+        });
+        teile.push(test, aus);
+      }
+    }
+    teile.push(meldung);
+    box.replaceChildren.apply(box, teile);
+  })();
+}
+
+// Merkt sich neu hinzugefügte Artikel und schickt nach kurzer Pause eine gemeinsame Mitteilung an die anderen Handys.
+let pushWarteschlange = [];
+let pushTimer = null;
+function pushMeldungVormerken(name) {
+  pushWarteschlange.push(name);
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushWarteschlangeSenden, 15000);
+}
+async function pushWarteschlangeSenden() {
+  clearTimeout(pushTimer);
+  pushTimer = null;
+  const namen = pushWarteschlange;
+  pushWarteschlange = [];
+  if (namen.length === 0 || !sb || !sbSitzung || navigator.onLine === false) return;
+  try { await sb.functions.invoke("push-senden", { body: { anzahl: namen.length, namen: namen.slice(0, 20) } }); } catch (e) { /* Mitteilung ist nur ein Extra */ }
+}
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "hidden" && pushWarteschlange.length > 0) pushWarteschlangeSenden();
+});
+
 function einstellungenOeffnen() {
   const liste = el("div", { class: "skin-liste" });
   function zeichnen() {
@@ -2587,13 +2716,17 @@ function einstellungenOeffnen() {
     }));
   }
   zeichnen();
+  const pushBox = el("div");
+  pushBereichZeichnen(pushBox);
   blattZeigen({
     titel: "Einstellungen",
     links: { text: "Schließen", aktion: blattSchliessen },
     inhalt: [
       el("h3", { class: "abschnitt", text: "Farbvariante" }),
       liste,
-      el("p", { class: "leise", style: "margin-top: 16px", text: "Die Wahl gilt nur für dieses Gerät." })
+      el("p", { class: "leise", style: "margin-top: 16px", text: "Die Wahl gilt nur für dieses Gerät." }),
+      el("h3", { class: "abschnitt", text: "Mitteilungen" }),
+      pushBox
     ]
   });
 }
@@ -2668,7 +2801,19 @@ if ("serviceWorker" in navigator) {
       location.reload();
     }
   });
+  // Tipp auf eine Mitteilung: zur Einkaufsliste springen.
+  navigator.serviceWorker.addEventListener("message", function (e) {
+    if (e.data && e.data.art === "zu-einkauf") {
+      const k = document.querySelector("nav button[data-ziel=einkauf]");
+      if (k && !k.classList.contains("aktiv")) k.click();
+      if (typeof blattSchliessen === "function") blattSchliessen();
+    }
+  });
   window.addEventListener("load", function () {
+    if (location.hash === "#einkauf") {
+      const k = document.querySelector("nav button[data-ziel=einkauf]");
+      if (k) k.click();
+    }
     navigator.serviceWorker.register("sw.js").catch(function (fehler) {
       console.log("Service Worker konnte nicht registriert werden:", fehler);
     });

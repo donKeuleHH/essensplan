@@ -2,7 +2,7 @@
 // Strategie: Wenn das Netz da ist, wird immer die neueste Version geladen.
 // Ohne Netz startet die App aus dem Zwischenspeicher (offline).
 // Bei Änderungen an der Dateiliste unten die Versionsnummer erhöhen.
-const VERSION = "essensplan-v43";
+const VERSION = "essensplan-v44";
 const DATEIEN = [
   "./",
   "index.html",
@@ -56,4 +56,31 @@ self.addEventListener("fetch", function (ereignis) {
         });
       })
   );
+});
+
+// Mitteilungen (Web-Push): Anzeige und Tipp darauf
+self.addEventListener("push", function (ereignis) {
+  let daten = {};
+  try { daten = ereignis.data ? ereignis.data.json() : {}; }
+  catch (f) { daten = { titel: "MealMap", text: ereignis.data ? ereignis.data.text() : "" }; }
+  ereignis.waitUntil(self.registration.showNotification(daten.titel || "MealMap", {
+    body: daten.text || "",
+    icon: "icon-192.png",
+    badge: "icon-192.png",
+    tag: "einkauf",
+    renotify: true,
+    data: { url: daten.url || "./" }
+  }));
+});
+
+self.addEventListener("notificationclick", function (ereignis) {
+  ereignis.notification.close();
+  const ziel = (ereignis.notification.data && ereignis.notification.data.url) || "./";
+  ereignis.waitUntil((async function () {
+    const fenster = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const f of fenster) {
+      if ("focus" in f) { await f.focus(); f.postMessage({ art: "zu-einkauf" }); return; }
+    }
+    if (self.clients.openWindow) await self.clients.openWindow(ziel);
+  })());
 });
