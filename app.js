@@ -1158,14 +1158,22 @@ function wochenplanZeichnen() {
     const id = plan ? plan.tage[i] : null;
     // Wurde ein Gericht inzwischen gelöscht, erscheint der Tag wieder als leer.
     const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
-    teile.push(tagKarte(i, tag, g || null, datumSchluessel(tag) === heute, sportTage(plan)[i]));
+    teile.push(tagKarte(i, tag, g || null, datumSchluessel(tag) === heute, sportTage(plan)[i], id === AUSWAERTS));
   }
   box.replaceChildren.apply(box, teile);
 }
 
-function tagKarte(index, tag, g, istHeute, istSport) {
+const AUSWAERTS = "auswaerts";
+const AUSWAERTS_PFAD = "M6 3v6a2 2 0 0 0 4 0V3M8 3v18M16 21V3c-2 2-3 5-3 8h3";
+const AUSWAERTS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + AUSWAERTS_PFAD + '"/></svg>';
+
+function tagKarte(index, tag, g, istHeute, istSport, auswaerts) {
   let inhalt;
-  if (g) {
+  if (auswaerts) {
+    const kreis = el("div", { class: "thumb klein auswaerts-kreis", "aria-hidden": "true" });
+    kreis.innerHTML = AUSWAERTS_ICON;
+    inhalt = [kreis, el("div", { class: "gericht-info" }, el("h3", { text: "Auswärts essen" }), el("p", { text: "Kein Gericht geplant" }))];
+  } else if (g) {
     inhalt = [
       g.bild
         ? el("img", { class: "thumb klein", src: g.bild, alt: "", loading: "lazy" })
@@ -1177,7 +1185,7 @@ function tagKarte(index, tag, g, istHeute, istSport) {
   }
   const karte = el("button", {
     class: "tag" + (istHeute ? " heute" : ""), type: "button", "aria-label": TAGNAMEN[index],
-    onclick: function () { gerichtWaehlen(index, g ? g.id : null); }
+    onclick: function () { gerichtWaehlen(index, auswaerts ? AUSWAERTS : (g ? g.id : null)); }
   },
     el("div", { class: "tag-datum" },
       el("div", { class: "name", text: TAGKURZ[index] }),
@@ -1192,7 +1200,7 @@ function tagKarte(index, tag, g, istHeute, istSport) {
     karte.setAttribute("aria-label", TAGNAMEN[index] + ", Sporttag");
   }
   langDruck(karte, function () { sportUmschalten(angezeigteWoche, index); });
-  if (!g) return karte;
+  if (!g && !auswaerts) return karte;
   return wischZeile(karte, "Entfernen", function () { tagSetzen(angezeigteWoche, index, null); });
 }
 
@@ -1226,17 +1234,25 @@ function gerichtWaehlen(index, aktuelleId) {
   }
   listeZeichnen2();
 
+  const auswaertsIcon = el("div", { class: "thumb klein auswaerts-kreis", "aria-hidden": "true" });
+  auswaertsIcon.innerHTML = AUSWAERTS_ICON;
+  const auswaertsKnopf = el("button", {
+    class: "karte auswaerts-wahl" + (aktuelleId === AUSWAERTS ? " aktiv" : ""), type: "button",
+    onclick: function () { tagSetzen(montag, index, AUSWAERTS); }
+  }, auswaertsIcon, el("div", { class: "gericht-info" }, el("h3", { text: "Auswärts essen" }), el("p", { text: "Kein Gericht an diesem Tag" })));
+
   blattZeigen({
     titel: TAGNAMEN[index] + ", " + kurzDatum(tag),
     links: { text: "Abbrechen", aktion: blattSchliessen },
     inhalt: [
+      auswaertsKnopf,
       gerichte.length > 0 ? kopfzeile : null,
       liste,
       aktuelleId !== null && aktuelleId !== undefined
         ? el("button", {
             class: "knopf knopf-gefahr", type: "button", style: "width: 100%; margin-top: 8px",
             onclick: function () { tagSetzen(montag, index, null); },
-            text: "Gericht für diesen Tag entfernen"
+            text: aktuelleId === AUSWAERTS ? "Auswärts essen entfernen" : "Gericht für diesen Tag entfernen"
           })
         : null
     ]
@@ -1792,7 +1808,7 @@ async function planBildErzeugen(montag) {
   for (let i = 0; i < 5; i++) {
     const id = plan ? plan.tage[i] : null;
     const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
-    eintraege.push({ g: g || null, foto: g && g.bild ? await bildLaden(g.bild) : null });
+    eintraege.push({ g: g || null, aus: id === AUSWAERTS, foto: g && g.bild ? await bildLaden(g.bild) : null });
   }
   const hatSport = sport.some(function (x) { return x; });
 
@@ -1825,9 +1841,9 @@ async function planBildErzeugen(montag) {
   // Tageskarten
   let y = 68 + 130;
   for (let i = 0; i < 5; i++) {
-    const e = eintraege[i], g = e.g;
+    const e = eintraege[i], g = e.g, belegt = !!g || e.aus;
     const x = RAND, w = B - 2 * RAND, FOTO = 156, ix = x + 20, iy = y + (KH - FOTO) / 2;
-    if (g) {
+    if (belegt) {
       c.fillStyle = KARTE; rundRechteck(c, x, y, w, KH, 40); c.fill();
     } else {
       c.save(); c.setLineDash([14, 12]); c.lineWidth = 3; c.strokeStyle = LEISE; c.globalAlpha = 0.55;
@@ -1839,6 +1855,11 @@ async function planBildErzeugen(montag) {
     if (g && e.foto) {
       const f = Math.max(FOTO / e.foto.width, FOTO / e.foto.height);
       c.drawImage(e.foto, ix + (FOTO - e.foto.width * f) / 2, iy + (FOTO - e.foto.height * f) / 2, e.foto.width * f, e.foto.height * f);
+    } else if (e.aus) {
+      c.globalAlpha = 0.18; c.fillStyle = AKZENT; c.fillRect(ix, iy, FOTO, FOTO); c.globalAlpha = 1;
+      c.save(); c.translate(ix + FOTO / 2 - 40, iy + FOTO / 2 - 40); c.scale(80 / 24, 80 / 24);
+      c.strokeStyle = AKZENT; c.lineWidth = 2; c.lineCap = "round"; c.lineJoin = "round";
+      c.stroke(new Path2D(AUSWAERTS_PFAD)); c.restore();
     } else if (g) {
       const f = kreisFarbe(g.titel);
       c.fillStyle = f[0]; c.fillRect(ix, iy, FOTO, FOTO);
@@ -1848,22 +1869,27 @@ async function planBildErzeugen(montag) {
       c.beginPath(); c.arc(ix + FOTO / 2, iy + FOTO / 2, 66, 0, Math.PI * 2); c.stroke();
     }
     c.restore();
-    if (!g) {
+    if (!belegt) {
       c.fillStyle = LEISE; c.globalAlpha = 0.6; c.textAlign = "center"; c.font = "800 52px " + SCHRIFT;
       c.fillText("?", ix + FOTO / 2, iy + FOTO / 2 + 18); c.globalAlpha = 1;
     }
     // Texte
-    const tx = ix + FOTO + 32, tb = x + w - 40 - tx - (g && sport[i] ? 104 : 0);
+    const tx = ix + FOTO + 32, tb = x + w - 40 - tx - (belegt && sport[i] ? 104 : 0);
     c.textAlign = "left";
     c.font = "700 41px " + SCHRIFT;
     const zweiZeilig = g ? textKuerzen(c, g.titel, tb, 2).length === 2 : false;
     c.font = "700 27px " + SCHRIFT;
     if ("letterSpacing" in c) c.letterSpacing = "3px";
-    c.fillStyle = g ? AKZENT : LEISE;
+    c.fillStyle = belegt ? AKZENT : LEISE;
     c.fillText(TAGNAMEN[i].toUpperCase(), tx, y + (zweiZeilig ? 52 : 58));
     if ("letterSpacing" in c) c.letterSpacing = "0px";
-    c.fillStyle = g ? TEXT : LEISE;
-    if (g) {
+    c.fillStyle = belegt ? TEXT : LEISE;
+    if (e.aus) {
+      c.font = "700 41px " + SCHRIFT;
+      c.fillText("Auswärts essen", tx, y + 112);
+      c.font = "400 27px " + SCHRIFT; c.fillStyle = LEISE;
+      c.fillText("Kein Gericht geplant", tx, y + 160);
+    } else if (g) {
       c.font = "700 41px " + SCHRIFT;
       let zeilen = textKuerzen(c, g.titel, tb, 2);
       if (zeilen.length === 2) { c.font = "700 36px " + SCHRIFT; zeilen = textKuerzen(c, g.titel, tb, 2); }
@@ -1879,7 +1905,7 @@ async function planBildErzeugen(montag) {
       c.fillText("Noch offen", tx, y + 114);
     }
     // Sport-Badge
-    if (g && sport[i]) {
+    if (belegt && sport[i]) {
       const bx = x + w - 40 - 38, by = y + KH / 2;
       c.fillStyle = SPORT; c.beginPath(); c.arc(bx, by, 38, 0, Math.PI * 2); c.fill();
       sportIconZeichnen(c, bx, by, 40, AUF_SPORT);
