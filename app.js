@@ -1330,7 +1330,27 @@ function wochenplanZeichnen() {
     const id = plan ? plan.tage[i] : null;
     // Wurde ein Gericht inzwischen gelöscht, erscheint der Tag wieder als leer.
     const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
-    teile.push(tagKarte(i, tag, g || null, datumSchluessel(tag) === heute, sportTage(plan)[i], id === AUSWAERTS));
+    const istSport = sportTage(plan)[i];
+    const auswaerts = id === AUSWAERTS;
+    const sig = [i, datumSchluessel(tag), datumSchluessel(tag) === heute, auswaerts, g ? g.id + "|" + g.titel + "|" + g.portionen + "|" + (g.bild ? g.bild.length : 0) + "|" + JSON.stringify(g.naehrwerte || null) : ""].join("#");
+    // Unveränderte Kachel behalten (kein Neuladen des Bildes, sonst flackert es);
+    // nur das Sport-Abzeichen wird an Ort und Stelle angepasst.
+    const vorhanden = Array.prototype.find.call(box.children, function (k) { return k.dataset && k.dataset.sig === sig; });
+    if (vorhanden) {
+      const kopf = vorhanden.querySelector(".wk-kopf");
+      const badge = kopf.querySelector(".wk-sport");
+      if (istSport && !badge) {
+        const b = el("span", { class: "sport-badge wk-sport", title: "Sporttag" });
+        b.innerHTML = SPORT_ICON;
+        kopf.appendChild(b);
+      } else if (!istSport && badge) badge.remove();
+      vorhanden.setAttribute("aria-label", TAGNAMEN[i] + (istSport ? ", Sporttag" : ""));
+      teile.push(vorhanden);
+    } else {
+      const neu = tagKarte(i, tag, g || null, datumSchluessel(tag) === heute, istSport, auswaerts);
+      neu.dataset.sig = sig;
+      teile.push(neu);
+    }
   }
   box.replaceChildren.apply(box, teile);
 }
