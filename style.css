@@ -641,7 +641,7 @@ main { touch-action: pan-y; }
 }
 #splash.weg { opacity: 0; }
 .splash-inhalt { display: flex; flex-direction: column; align-items: center; margin-top: -4vh; }
-.splash-logo { width: min(64vw, 300px); height: auto; animation: splash-ein 0.6s 0.1s ease-out both; }
+.splash-logo { width: min(60vw, 280px); height: auto; animation: splash-ein 0.6s 0.1s ease-out both; }
 @keyframes splash-ein { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .splash-logo { animation: none; } }
 
@@ -828,11 +828,11 @@ main { touch-action: pan-y; }
 :root[data-skin="dark"] {
   --bg: #0b0d12; --bg-tief: #07080b; --karte: #161a22; --karte-hell: #1f2430;
   --linie: rgba(255, 255, 255, 0.08);
-  --akzent: #f5b73c; --akzent-schwach: rgba(245, 183, 60, 0.15); --auf-akzent: #2b2110;
+  --akzent: #8fc4a0; --akzent-schwach: rgba(143, 196, 160, 0.15); --auf-akzent: #10231a;
   --text: #f1f3f7; --text-leise: #8a93a3;
   --gefahr: #ff8a80; --auf-gefahr: #2d0f0c;
   --sport: #4f9fe3; --auf-sport: #0e2236;
-  --knopf-glow: rgba(245, 183, 60, 0);
+  --knopf-glow: rgba(143, 196, 160, 0);
   --schwebend: 0 8px 24px rgba(0, 0, 0, 0.6);
   --erhaben: 0 0 0 1px rgba(255, 255, 255, 0.04);
   --eingesenkt: inset 0 2px 6px rgba(0, 0, 0, 0.6);
