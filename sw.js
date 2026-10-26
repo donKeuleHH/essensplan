@@ -2,7 +2,7 @@
 // Strategie: Wenn das Netz da ist, wird immer die neueste Version geladen.
 // Ohne Netz startet die App aus dem Zwischenspeicher (offline).
 // Bei Änderungen an der Dateiliste unten die Versionsnummer erhöhen.
-const VERSION = "essensplan-v56";
+const VERSION = "essensplan-v57";
 const DATEIEN = [
   "./",
   "index.html",
@@ -11,9 +11,9 @@ const DATEIEN = [
   "supabase.js",
   "app.js",
   "manifest.webmanifest",
-  "icon-192.png",
-  "icon-512.png",
-  "apple-touch-icon.png"
+  "app-icon-192.png",
+  "app-icon-512.png",
+  "app-icon-180.png"
 ];
 
 self.addEventListener("install", function (ereignis) {
@@ -65,8 +65,8 @@ self.addEventListener("push", function (ereignis) {
   catch (f) { daten = { titel: "MealMap", text: ereignis.data ? ereignis.data.text() : "" }; }
   ereignis.waitUntil(self.registration.showNotification(daten.titel || "MealMap", {
     body: daten.text || "",
-    icon: "icon-192.png",
-    badge: "icon-192.png",
+    icon: "app-icon-192.png",
+    badge: "app-icon-192.png",
     tag: "einkauf",
     renotify: true,
     data: { url: daten.url || "./" }
