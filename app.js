@@ -1363,7 +1363,7 @@ const AUSWAERTS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 function tagKarte(index, tag, g, istHeute, istSport, auswaerts) {
   let bild;
   if (auswaerts) { bild = el("div", { class: "wk-bild wk-aus" }); bild.innerHTML = AUSWAERTS_ICON; }
-  else if (g && g.bild) bild = el("img", { class: "wk-bild", src: g.bild, alt: "" });
+  else if (g && g.bild) bild = el("img", { class: "wk-bild", src: g.bild, alt: "", draggable: "false" });
   else if (g) bild = kreisBild(g.titel, "wk-bild");
   else bild = el("div", { class: "wk-bild wk-leer" }, el("span", { text: "+" }));
   const marke = el("span", { class: "wk-tag" + (istHeute ? " heute" : "") }, TAGKURZ[index] + " · " + kurzDatum(tag));

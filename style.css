@@ -766,7 +766,7 @@ main { touch-action: pan-y; }
 .wk:active { background: var(--karte-hell); }
 .wk.heute { outline: 2px solid var(--akzent); outline-offset: -2px; }
 .wk-fenster { position: relative; }
-.wk-bild { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+.wk-bild { pointer-events: none; -webkit-user-drag: none; user-select: none; -webkit-touch-callout: none; display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
 .wk-aus, .wk-leer { display: grid; place-items: center; background: var(--akzent-schwach); color: var(--akzent); }
 .wk-aus svg { width: 42px; height: 42px; }
 .wk-leer { font-size: 2.2rem; }
