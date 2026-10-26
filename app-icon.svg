@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024"><rect width="1024" height="1024" fill="#0b0d12"/><g transform="translate(512 512) scale(0.90317) translate(-626.5 -650.5)">
 <defs>
- <mask id="fm-d1" maskUnits="userSpaceOnUse" x="0" y="0" width="1254" height="1254">
+ <mask id="fm-m" maskUnits="userSpaceOnUse" x="0" y="0" width="1254" height="1254">
   <rect width="1254" height="1254" fill="#fff"/>
   <g fill="#000" stroke="#000" stroke-width="26" stroke-linejoin="round"><rect x="520" y="268" width="30" height="260" rx="15.0"/><rect x="583" y="268" width="29" height="260" rx="14.5"/><rect x="641" y="268" width="29" height="260" rx="14.5"/><rect x="703" y="268" width="30" height="260" rx="15.0"/><path d="M520 300 L733 300 L754 500 C757 548 740 583 700 607 C674 622 668 640 667 668 L675 985 A47.5 47.5 0 0 1 580 985 L588 668 C587 640 581 622 555 607 C515 583 497 548 499 500 Z"/></g>
  </mask>
- <mask id="sl-d1" maskUnits="userSpaceOnUse" x="0" y="0" width="1254" height="1254">
+ <mask id="sl-m" maskUnits="userSpaceOnUse" x="0" y="0" width="1254" height="1254">
   <rect width="1254" height="1254" fill="#fff"/><rect x="550" y="200" width="33" height="287" rx="16.5" fill="#000"/><rect x="612" y="200" width="29" height="287" rx="14.5" fill="#000"/><rect x="670" y="200" width="33" height="287" rx="16.5" fill="#000"/>
  </mask>
 </defs>
-<g fill="#4f9fe3"><rect x="207" y="572" width="70" height="203" rx="30"/><rect x="299" y="492" width="101" height="364" rx="32"/><rect x="976.0" y="572" width="70" height="203" rx="30"/><rect x="853.0" y="492" width="101" height="364" rx="32"/><rect x="423" y="637" width="408" height="76" mask="url(#fm-d1)"/></g>
-<g fill="#f5b73c" mask="url(#sl-d1)"><rect x="520" y="268" width="30" height="260" rx="15.0"/><rect x="583" y="268" width="29" height="260" rx="14.5"/><rect x="641" y="268" width="29" height="260" rx="14.5"/><rect x="703" y="268" width="30" height="260" rx="15.0"/><path d="M520 300 L733 300 L754 500 C757 548 740 583 700 607 C674 622 668 640 667 668 L675 985 A47.5 47.5 0 0 1 580 985 L588 668 C587 640 581 622 555 607 C515 583 497 548 499 500 Z"/></g>
+<g fill="#2f8f82"><rect x="207" y="572" width="70" height="203" rx="30"/><rect x="299" y="492" width="101" height="364" rx="32"/><rect x="976.0" y="572" width="70" height="203" rx="30"/><rect x="853.0" y="492" width="101" height="364" rx="32"/><rect x="423" y="637" width="408" height="76" mask="url(#fm-m)"/></g>
+<g fill="#5fd0be" mask="url(#sl-m)"><rect x="520" y="268" width="30" height="260" rx="15.0"/><rect x="583" y="268" width="29" height="260" rx="14.5"/><rect x="641" y="268" width="29" height="260" rx="14.5"/><rect x="703" y="268" width="30" height="260" rx="15.0"/><path d="M520 300 L733 300 L754 500 C757 548 740 583 700 607 C674 622 668 640 667 668 L675 985 A47.5 47.5 0 0 1 580 985 L588 668 C587 640 581 622 555 607 C515 583 497 548 499 500 Z"/></g>
 </g></svg>
