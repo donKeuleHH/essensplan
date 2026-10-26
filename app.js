@@ -1511,6 +1511,7 @@ function gerichtWaehlen(index, aktuelleId) {
   const montag = angezeigteWoche;
   const tag = tagVerschieben(montag, index);
   const liste = el("div", { style: "margin-top: 14px" });
+  const aktuellesGericht = gerichte.find(function (x) { return x.id === aktuelleId; }) || null;
   const auswahlFilter = { kh: "", ern: "" };
   let suchtext = "";
   const zuletztListe = zuletztGeplanteGerichte(aktuelleId, 6);
@@ -1530,9 +1531,11 @@ function gerichtWaehlen(index, aktuelleId) {
   function listeZeichnen2() {
     if (zuletzt) zuletzt.hidden = !!(suchtext.trim() || auswahlFilter.kh || auswahlFilter.ern);
     const treffer = gerichte
-      .filter(function (g) { return gerichtTrifft(g, auswahlFilter, suchtext); })
+      .filter(function (g) { return g.id !== aktuelleId && gerichtTrifft(g, auswahlFilter, suchtext); })
       .sort(function (a, b) { return a.titel.localeCompare(b.titel, "de"); });
-    if (gerichte.length === 0) {
+    if (gerichte.length === 1 && aktuellesGericht && treffer.length === 0 && !suchtext.trim()) {
+      liste.replaceChildren();
+    } else if (gerichte.length === 0) {
       liste.replaceChildren(el("div", { class: "karte" },
         el("p", { text: "Du hast noch keine Gerichte angelegt. Lege sie zuerst im Reiter „Gerichte“ an." })));
     } else if (treffer.length === 0) {
@@ -1561,13 +1564,27 @@ function gerichtWaehlen(index, aktuelleId) {
     titel: TAGNAMEN[index] + ", " + kurzDatum(tag),
     links: { text: "Abbrechen", aktion: blattSchliessen },
     inhalt: [
-      aktuelleId !== null && aktuelleId !== undefined
-        ? el("button", {
-            class: "knopf knopf-gefahr", type: "button", style: "width: 100%",
-            onclick: function () { tagSetzen(montag, index, null); },
-            text: aktuelleId === AUSWAERTS ? "Auswärts essen entfernen" : "Gericht für diesen Tag entfernen"
-          })
-        : null,
+      aktuellesGericht
+        ? el("div", { class: "aktuell-karte" },
+            el("div", { class: "aktuell-label", text: "Aktuell am " + TAGNAMEN[index] }),
+            el("div", { class: "waehl-zeile" },
+              gerichtKarte(aktuellesGericht, function () { detailOeffnen(aktuellesGericht.id, { index: index, montag: montag, aktuelleId: aktuelleId }); }),
+              el("button", {
+                class: "waehl-info", type: "button", "aria-label": "Rezept ansehen: " + aktuellesGericht.titel, text: "i",
+                onclick: function () { detailOeffnen(aktuellesGericht.id, { index: index, montag: montag, aktuelleId: aktuelleId }); }
+              })),
+            el("button", {
+              class: "aktuell-entfernen", type: "button",
+              onclick: function () { tagSetzen(montag, index, null); },
+              text: "Gericht für diesen Tag entfernen"
+            }))
+        : (aktuelleId !== null && aktuelleId !== undefined
+            ? el("button", {
+                class: "knopf knopf-gefahr", type: "button", style: "width: 100%",
+                onclick: function () { tagSetzen(montag, index, null); },
+                text: aktuelleId === AUSWAERTS ? "Auswärts essen entfernen" : "Gericht für diesen Tag entfernen"
+              })
+            : null),
       auswaertsKnopf,
       zuletzt,
       gerichte.length > 0 ? kopfzeile : null,

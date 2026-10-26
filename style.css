@@ -851,3 +851,19 @@ main { touch-action: pan-y; }
   border: 1.5px solid var(--akzent); cursor: pointer;
 }
 .waehl-info:active { background: var(--akzent-schwach); }
+
+/* ===== Aktuelles Gericht oben im Tag-Auswahlfenster ===== */
+.aktuell-karte {
+  margin-bottom: 14px; padding: 10px 10px 4px;
+  border: 1px solid var(--akzent); border-radius: 24px; background: var(--karte);
+}
+.aktuell-karte .gericht-karte { margin-bottom: 4px; background: transparent; border-color: transparent; box-shadow: none; }
+.aktuell-label {
+  margin: 2px 6px 6px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--akzent);
+}
+.aktuell-entfernen {
+  display: block; width: 100%; padding: 10px; margin: 0 0 4px;
+  font: inherit; font-size: 0.85rem; font-weight: 600; text-align: center;
+  color: var(--gefahr); background: transparent; border: 0; cursor: pointer;
+}
