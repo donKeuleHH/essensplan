@@ -1299,15 +1299,22 @@ function wochenKopf() {
   )];
   const aktionen = el("div", { class: "woche-aktionen" });
   if (datumSchluessel(montag) !== datumSchluessel(standard)) {
-    aktionen.append(el("button", {
+    const zurueck = el("button", {
       class: "textknopf", type: "button",
-      onclick: function () { modiBeenden(); angezeigteWoche = standardWoche(); wochenAnsichtenZeichnen(); },
-      text: "Zu KW " + kalenderwoche(standard)
-    }));
+      onclick: function () { modiBeenden(); angezeigteWoche = standardWoche(); wochenAnsichtenZeichnen(); }
+    });
+    zurueck.innerHTML = RUECK_ICON;
+    zurueck.append(" Zu KW " + kalenderwoche(standard));
+    aktionen.append(zurueck);
+  } else {
+    aktionen.append(el("span"));
   }
-  aktionen.append(el("button", {
-    class: "textknopf", type: "button", onclick: function () { planTeilenOeffnen(); }
-  }, teilenIconKnoten(), " Plan teilen"));
+  const icons = el("div", { class: "woche-icons" });
+  icons.append(el("button", {
+    class: "rundknopf-klein", type: "button", "aria-label": "Plan teilen", title: "Plan teilen",
+    onclick: function () { planTeilenOeffnen(); }
+  }, teilenIconKnoten()));
+  aktionen.append(icons);
   teile.push(aktionen);
   return teile;
 }
@@ -1360,9 +1367,10 @@ function wochenplanZeichnen() {
       el("button", { type: "button", class: "gefahr-knopf", disabled: anzahl === 0 || undefined, onclick: function () { loeschAusfuehren(); }, text: "Entfernen" }),
       el("button", { type: "button", class: "zu-knopf", "aria-label": "Abbrechen", onclick: function () { loeschModusBeenden(); wochenplanZeichnen(); }, text: "✕" })));
   } else {
-    teile[1].append(el("button", {
-      class: "textknopf", type: "button", onclick: function () { loeschModusStarten(); }
-    }, loeschIconKnoten(), " Gerichte entfernen"));
+    teile[1].querySelector(".woche-icons").append(el("button", {
+      class: "rundknopf-klein", type: "button", "aria-label": "Gerichte entfernen", title: "Gerichte entfernen",
+      onclick: function () { loeschModusStarten(); }
+    }, loeschIconKnoten()));
   }
   if (sportModus) {
     teile.splice(2, 0, el("div", { class: "sport-hinweis" },
@@ -1372,6 +1380,7 @@ function wochenplanZeichnen() {
   box.replaceChildren.apply(box, teile);
 }
 
+const RUECK_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg>';
 const AUSWAERTS = "auswaerts";
 const AUSWAERTS_PFAD = "M6 3v6a2 2 0 0 0 4 0V3M8 3v18M16 21V3c-2 2-3 5-3 8h3";
 const AUSWAERTS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + AUSWAERTS_PFAD + '"/></svg>';

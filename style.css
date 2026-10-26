@@ -803,3 +803,10 @@ main { touch-action: pan-y; }
 /* Leisten bleiben beim Scrollen sichtbar */
 .sport-hinweis { position: sticky; top: 4px; z-index: 5; background: var(--bg) linear-gradient(var(--akzent-schwach), var(--akzent-schwach)); box-shadow: 0 0 0 4px var(--bg); }
 .sport-hinweis.loesch-hinweis { background: var(--bg) linear-gradient(rgba(240, 118, 107, 0.16), rgba(240, 118, 107, 0.16)); }
+
+/* Wochenzeile: links Rückkehr, rechts runde Icon-Knöpfe */
+.woche-aktionen { justify-content: space-between; gap: 10px; margin: 0 4px 10px; }
+.woche-icons { display: flex; gap: 10px; margin-left: auto; }
+.rundknopf-klein { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; color: var(--akzent); background: var(--karte); border: 1px solid var(--linie); border-radius: 50%; box-shadow: var(--erhaben); cursor: pointer; }
+.rundknopf-klein:active { background: var(--karte-hell); }
+:root[data-skin="nacht"] .rundknopf-klein { box-shadow: none; }
