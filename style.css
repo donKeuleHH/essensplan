@@ -702,7 +702,7 @@ main { touch-action: pan-y; }
 @media (prefers-reduced-motion: reduce) { .abdunkeln, .filterblatt { animation: none; } }
 
 /* Langes Drücken (Sport-Badge, Wischen): keinen Text markieren und kein iOS-Menü (Kopieren / Nachschlagen) zeigen */
-.tag, .tag *, .wisch, .gericht-karte, .kachel, .kachel *, .nav-icon, nav button {
+.tag, .tag *, .wk, .wk *, .wisch, .gericht-karte, .kachel, .kachel *, .nav-icon, nav button {
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
 
@@ -758,3 +758,23 @@ main { touch-action: pan-y; }
 
 .extra-karte .extra-form { margin: 0; padding: 0 18px 18px; }
 .extra-form[hidden] { display: none; }
+
+/* ===== Wochenplan als Kacheln ===== */
+#wochenplan.aktiv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
+#wochenplan > :not(.wk) { grid-column: 1 / -1; }
+.wk { display: block; width: 100%; padding: 0; text-align: left; font: inherit; color: inherit; background: var(--karte); border: 1px solid var(--linie); border-radius: 22px; overflow: hidden; box-shadow: var(--erhaben); cursor: pointer; }
+.wk:active { background: var(--karte-hell); }
+.wk.heute { outline: 2px solid var(--akzent); outline-offset: -2px; }
+.wk-fenster { position: relative; }
+.wk-bild { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; }
+.wk-aus, .wk-leer { display: grid; place-items: center; background: var(--akzent-schwach); color: var(--akzent); }
+.wk-aus svg { width: 42px; height: 42px; }
+.wk-leer { font-size: 2.2rem; }
+.wk-kopf { position: absolute; left: 7px; right: 7px; top: 7px; display: flex; justify-content: space-between; align-items: center; }
+.wk-tag { padding: 3px 8px; font-size: 0.7rem; font-weight: 650; color: #fff; background: rgba(20, 24, 30, 0.62); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); border-radius: 999px; }
+.wk-tag.heute { background: var(--akzent); color: var(--auf-akzent); }
+.wk-sport { position: static; margin: 0; }
+.wk-text { padding: 9px 11px 11px; }
+.wk-text h3 { margin: 0; font-size: 0.92rem; line-height: 1.25; font-weight: 650; min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.wk-text p { margin: 4px 0 0; color: var(--text-leise); font-size: 0.78rem; }
+.wk-offen { color: var(--akzent); }

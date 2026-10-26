@@ -1339,41 +1339,36 @@ const AUSWAERTS = "auswaerts";
 const AUSWAERTS_PFAD = "M6 3v6a2 2 0 0 0 4 0V3M8 3v18M16 21V3c-2 2-3 5-3 8h3";
 const AUSWAERTS_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + AUSWAERTS_PFAD + '"/></svg>';
 
+// Ein Tag im Wochenplan: Bildkachel mit Tagesmarke, Name und kurzer Info.
 function tagKarte(index, tag, g, istHeute, istSport, auswaerts) {
-  let inhalt;
+  let bild;
+  if (auswaerts) { bild = el("div", { class: "wk-bild wk-aus" }); bild.innerHTML = AUSWAERTS_ICON; }
+  else if (g && g.bild) bild = el("img", { class: "wk-bild", src: g.bild, alt: "" });
+  else if (g) bild = kreisBild(g.titel, "wk-bild");
+  else bild = el("div", { class: "wk-bild wk-leer" }, el("span", { text: "+" }));
+  const marke = el("span", { class: "wk-tag" + (istHeute ? " heute" : "") }, TAGKURZ[index] + " · " + kurzDatum(tag));
+  const kopf = el("div", { class: "wk-kopf" }, marke);
+  if (istSport) {
+    const badge = el("span", { class: "sport-badge wk-sport", title: "Sporttag" });
+    badge.innerHTML = SPORT_ICON;
+    kopf.appendChild(badge);
+  }
+  let text;
   if (auswaerts) {
-    const kreis = el("div", { class: "thumb klein auswaerts-kreis", "aria-hidden": "true" });
-    kreis.innerHTML = AUSWAERTS_ICON;
-    inhalt = [kreis, el("div", { class: "gericht-info" }, el("h3", { text: "Auswärts essen" }), el("p", { text: "Kein Gericht geplant" }))];
+    text = [el("h3", { text: "Auswärts essen" }), el("p", { text: "Kein Gericht geplant" })];
   } else if (g) {
-    inhalt = [
-      g.bild
-        ? el("img", { class: "thumb klein", src: g.bild, alt: "", loading: "lazy" })
-        : kreisBild(g.titel, "thumb klein"),
-      el("div", { class: "gericht-info" }, el("h3", { text: g.titel }), el("p", { text: kurzInfo(g) }))
-    ];
+    const kcal = g.naehrwerte && g.naehrwerte.kcal !== null && g.naehrwerte.kcal !== undefined ? " · " + zahlText(g.naehrwerte.kcal) + " kcal" : "";
+    text = [el("h3", { text: g.titel }), el("p", { text: zahlText(g.portionen) + " Port." + kcal })];
   } else {
-    inhalt = [el("span", { class: "tag-leer", text: "＋ Gericht wählen" })];
+    text = [el("h3", { class: "wk-offen", text: "Gericht wählen" })];
   }
   const karte = el("button", {
-    class: "tag" + (istHeute ? " heute" : ""), type: "button", "aria-label": TAGNAMEN[index],
+    class: "wk" + (istHeute ? " heute" : ""), type: "button",
+    "aria-label": TAGNAMEN[index] + (istSport ? ", Sporttag" : ""),
     onclick: function () { gerichtWaehlen(index, auswaerts ? AUSWAERTS : (g ? g.id : null)); }
-  },
-    el("div", { class: "tag-datum" },
-      el("div", { class: "name", text: TAGKURZ[index] }),
-      el("div", { class: "datum", text: kurzDatum(tag) })
-    ),
-    el("div", { class: "tag-inhalt" }, inhalt)
-  );
-  if (istSport) {
-    const badge = el("span", { class: "sport-badge", title: "Sporttag" });
-    badge.innerHTML = SPORT_ICON;
-    karte.appendChild(badge);
-    karte.setAttribute("aria-label", TAGNAMEN[index] + ", Sporttag");
-  }
+  }, el("div", { class: "wk-fenster" }, bild, kopf), el("div", { class: "wk-text" }, text));
   langDruck(karte, function () { sportUmschalten(angezeigteWoche, index); });
-  if (!g && !auswaerts) return karte;
-  return wischZeile(karte, "Entfernen", function () { tagSetzen(angezeigteWoche, index, null); });
+  return karte;
 }
 
 // Zeigt die Gerichte zur Auswahl für einen Tag der gerade angezeigten Woche.
