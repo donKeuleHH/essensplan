@@ -377,7 +377,7 @@ function navigationEinrichten() {
       knopf.classList.add("aktiv");
       document.getElementById(knopf.dataset.ziel).classList.add("aktiv");
       titel.textContent = knopf.dataset.titel;
-      sportModusBeenden();
+      modiBeenden();
       sportKnopfZeigen();
       if (knopf.dataset.ziel === "wochenplan") wochenplanZeichnen();
     });
@@ -1201,7 +1201,7 @@ function standardWoche() {
 let angezeigteWoche = standardWoche();
 
 function wocheWechseln(richtung) {
-  sportModusBeenden();
+  modiBeenden();
   angezeigteWoche = tagVerschieben(angezeigteWoche, 7 * richtung);
   wochenAnsichtenZeichnen();
 }
@@ -1301,7 +1301,7 @@ function wochenKopf() {
   if (datumSchluessel(montag) !== datumSchluessel(standard)) {
     aktionen.append(el("button", {
       class: "textknopf", type: "button",
-      onclick: function () { sportModusBeenden(); angezeigteWoche = standardWoche(); wochenAnsichtenZeichnen(); },
+      onclick: function () { modiBeenden(); angezeigteWoche = standardWoche(); wochenAnsichtenZeichnen(); },
       text: "Zu KW " + kalenderwoche(standard)
     }));
   }
@@ -1342,12 +1342,27 @@ function wochenplanZeichnen() {
     const vorhanden = Array.prototype.find.call(box.children, function (k) { return k.dataset && k.dataset.sig === sig; });
     if (vorhanden) {
       sportZeichenSetzen(vorhanden, istSport, i);
+      loeschZeichenSetzen(vorhanden, i);
       teile.push(vorhanden);
     } else {
       const neu = tagKarte(i, tag, g || null, datumSchluessel(tag) === heute, istSport, auswaerts);
       neu.dataset.sig = sig;
+      loeschZeichenSetzen(neu, i);
       teile.push(neu);
     }
+  }
+  if (loeschModus && loeschAuswahl) {
+    const belegte = loeschBelegt();
+    const anzahl = loeschAuswahl.filter(Boolean).length;
+    teile.splice(1, 1, el("div", { class: "sport-hinweis loesch-hinweis" },
+      el("span", { text: anzahl + " gewählt" }),
+      el("button", { type: "button", class: "leise-knopf", onclick: function () { loeschAlleUmschalten(); }, text: "Alle" }),
+      el("button", { type: "button", class: "gefahr-knopf", disabled: anzahl === 0 || undefined, onclick: function () { loeschAusfuehren(); }, text: "Entfernen" }),
+      el("button", { type: "button", class: "zu-knopf", "aria-label": "Abbrechen", onclick: function () { loeschModusBeenden(); wochenplanZeichnen(); }, text: "✕" })));
+  } else {
+    teile[1].append(el("button", {
+      class: "textknopf", type: "button", onclick: function () { loeschModusStarten(); }
+    }, loeschIconKnoten(), " Gerichte entfernen"));
   }
   if (sportModus) {
     teile.splice(2, 0, el("div", { class: "sport-hinweis" },
@@ -1385,11 +1400,17 @@ function tagKarte(index, tag, g, istHeute, istSport, auswaerts) {
       if (sportModus && sportAuswahl) {
         sportAuswahl[index] = !sportAuswahl[index];
         sportZeichenSetzen(karte, sportAuswahl[index], index);
+      } else if (loeschModus && loeschAuswahl) {
+        if (karte.dataset.belegt !== "1") return;
+        loeschAuswahl[index] = !loeschAuswahl[index];
+        loeschZeichenSetzen(karte, index);
+        wochenplanZeichnen();
       } else {
         gerichtWaehlen(index, auswaerts ? AUSWAERTS : (g ? g.id : null));
       }
     }
   }, el("div", { class: "wk-fenster" }, bild, kopf), el("div", { class: "wk-text" }, text));
+  karte.dataset.belegt = (auswaerts || g) ? "1" : "0";
   sportZeichenSetzen(karte, istSport, index);
   return karte;
 }
@@ -1399,7 +1420,7 @@ function sportZeichenSetzen(karte, istSport, index) {
   const kopf = karte.querySelector(".wk-kopf");
   const fenster = karte.querySelector(".wk-fenster");
   let badge = kopf.querySelector(".wk-sport");
-  let haken = fenster.querySelector(".wk-haken");
+  let haken = fenster.querySelector(".wk-haken:not(.loesch)");
   if (sportModus) {
     if (badge) badge.remove();
     if (!haken) { haken = el("span", { class: "wk-haken" }); fenster.appendChild(haken); }
@@ -1483,12 +1504,105 @@ function sportTage(plan) {
 const SPORT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>';
 
 // Langes Drücken auf einen Tag: Sport-Badge an oder aus.
+/* ---------- Entfernen-Modus ---------- */
+
+let loeschModus = false;
+let loeschAuswahl = null;
+
+function loeschIconKnoten() {
+  const k = document.createElement("span");
+  k.className = "teilen-icon";
+  k.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
+  return k;
+}
+
+function modiBeenden() { sportModusBeenden(); loeschModusBeenden(); }
+
+// Welche Tage der angezeigten Woche haben ein Gericht oder „Auswärts essen“?
+function loeschBelegt() {
+  const plan = plaene.get(datumSchluessel(angezeigteWoche));
+  const r = [];
+  for (let i = 0; i < 5; i++) {
+    const id = plan ? plan.tage[i] : null;
+    r.push(id === AUSWAERTS || (id !== null && id !== undefined && gerichte.some(function (x) { return x.id === id; })));
+  }
+  return r;
+}
+
+function loeschModusStarten() {
+  sportModusBeenden();
+  loeschModus = true;
+  loeschAuswahl = [false, false, false, false, false];
+  sportKnopfZeigen();
+  wochenplanZeichnen();
+}
+
+function loeschModusBeenden() {
+  loeschModus = false; loeschAuswahl = null;
+}
+
+function loeschAlleUmschalten() {
+  const belegt = loeschBelegt();
+  const alleGewaehlt = belegt.every(function (b, i) { return !b || loeschAuswahl[i]; });
+  loeschAuswahl = belegt.map(function (b) { return alleGewaehlt ? false : b; });
+  wochenplanZeichnen();
+}
+
+// Kreis mit Haken auf den belegten Kacheln, leere Kacheln werden abgedunkelt.
+function loeschZeichenSetzen(karte, index) {
+  const fenster = karte.querySelector(".wk-fenster");
+  let haken = fenster.querySelector(".wk-haken.loesch");
+  if (!loeschModus || !loeschAuswahl) {
+    if (haken) haken.remove();
+    karte.classList.remove("gew-loesch", "aus");
+    return;
+  }
+  const belegt = karte.dataset.belegt === "1";
+  karte.classList.toggle("aus", !belegt);
+  if (!belegt) { if (haken) haken.remove(); karte.classList.remove("gew-loesch"); return; }
+  if (!haken) { haken = el("span", { class: "wk-haken loesch" }); fenster.appendChild(haken); }
+  const an = !!loeschAuswahl[index];
+  haken.classList.toggle("an", an);
+  haken.textContent = an ? "✓" : "";
+  karte.classList.toggle("gew-loesch", an);
+  karte.setAttribute("aria-label", TAGNAMEN[index] + (an ? ", zum Entfernen gewählt" : ", nicht gewählt"));
+}
+
+async function loeschAusfuehren() {
+  const tage = [];
+  loeschAuswahl.forEach(function (v, i) { if (v) tage.push(i); });
+  if (tage.length === 0) return;
+  const text = tage.length === 1 ? "1 Gericht aus dem Plan entfernen?" : tage.length + " Gerichte aus dem Plan entfernen?";
+  if (!confirm(text)) return;
+  const montag = angezeigteWoche;
+  const schluessel = datumSchluessel(montag);
+  const alt = plaene.get(schluessel);
+  const plan = {
+    woche: schluessel,
+    tage: alt ? alt.tage.slice() : [null, null, null, null, null],
+    sport: sportTage(alt),
+    aktualisiert: zeitNach(alt),
+    dirty: 1
+  };
+  tage.forEach(function (i) { plan.tage[i] = null; });
+  loeschModusBeenden();
+  try {
+    await schreiben("wochenplan", function (st) { return st.put(plan); });
+    await plaeneNeuLaden();
+    syncAnstossen();
+  } catch (fehler) {
+    alert("Das Speichern hat leider nicht geklappt.");
+    wochenplanZeichnen();
+  }
+}
+
 let sportModus = false;
 let sportAuswahl = null;
 let sportMontag = null;
 
 function sportModusUmschalten() {
   if (sportModus) { sportModusBeenden(); wochenplanZeichnen(); return; }
+  loeschModusBeenden();
   sportModus = true;
   sportMontag = angezeigteWoche;
   sportAuswahl = sportTage(plaene.get(datumSchluessel(sportMontag))).slice();

@@ -787,3 +787,19 @@ main { touch-action: pan-y; }
 .wk-haken { position: absolute; right: 8px; bottom: 8px; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; border: 2px solid #fff; background: rgba(20, 24, 30, 0.45); color: #fff; font-weight: 800; font-size: 1rem; }
 .wk-haken.an { background: var(--sport); border-color: var(--sport); color: var(--auf-sport); }
 .wk.gew { outline: 3px solid var(--sport); outline-offset: -3px; }
+
+/* Entfernen-Modus */
+:root { --rot: #f0766b; --auf-rot: #2a1210; }
+.loesch-hinweis { background: rgba(240, 118, 107, 0.16); color: var(--rot); gap: 8px; padding: 8px 8px 8px 16px; }
+.loesch-hinweis span { flex: 1; }
+.loesch-hinweis button { font: inherit; font-weight: 700; padding: 7px 13px; border-radius: 999px; cursor: pointer; }
+.loesch-hinweis .leise-knopf { background: transparent; color: var(--rot); border: 1.5px solid var(--rot); }
+.loesch-hinweis .gefahr-knopf { background: var(--rot); color: var(--auf-rot); border: 1.5px solid var(--rot); }
+.loesch-hinweis .gefahr-knopf:disabled { opacity: 0.4; }
+.loesch-hinweis .zu-knopf { width: 32px; height: 32px; padding: 0; display: grid; place-items: center; border: 0; background: var(--karte); color: var(--text-leise); }
+.wk-haken.loesch.an { background: var(--rot); border-color: var(--rot); color: var(--auf-rot); }
+.wk.gew-loesch { outline: 3px solid var(--rot); outline-offset: -3px; }
+.wk.aus { opacity: 0.38; }
+/* Leisten bleiben beim Scrollen sichtbar */
+.sport-hinweis { position: sticky; top: 4px; z-index: 5; background: var(--bg) linear-gradient(var(--akzent-schwach), var(--akzent-schwach)); box-shadow: 0 0 0 4px var(--bg); }
+.sport-hinweis.loesch-hinweis { background: var(--bg) linear-gradient(rgba(240, 118, 107, 0.16), rgba(240, 118, 107, 0.16)); }
