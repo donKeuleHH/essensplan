@@ -1367,6 +1367,13 @@ function wochenplanZeichnen() {
       el("button", { type: "button", class: "gefahr-knopf", disabled: anzahl === 0 || undefined, onclick: function () { loeschAusfuehren(); }, text: "Entfernen" }),
       el("button", { type: "button", class: "zu-knopf", "aria-label": "Abbrechen", onclick: function () { loeschModusBeenden(); wochenplanZeichnen(); }, text: "✕" })));
   } else {
+    const hantel = el("button", {
+      class: "rundknopf-klein" + (sportModus ? " an" : ""), type: "button", id: "sport-knopf",
+      "aria-label": "Sporttage wählen", "aria-pressed": sportModus ? "true" : "false", title: "Sporttage wählen",
+      onclick: function () { sportModusUmschalten(); }
+    });
+    hantel.innerHTML = SPORT_ICON;
+    teile[1].querySelector(".woche-icons").prepend(hantel);
     teile[1].querySelector(".woche-icons").append(el("button", {
       class: "rundknopf-klein", type: "button", "aria-label": "Gerichte entfernen", title: "Gerichte entfernen",
       onclick: function () { loeschModusStarten(); }
@@ -1631,13 +1638,7 @@ function sportModusBeenden() {
   sportSpeichern(montag, auswahl);
 }
 
-function sportKnopfZeigen() {
-  const knopf = document.getElementById("sport-knopf");
-  const aufPlan = document.getElementById("wochenplan").classList.contains("aktiv");
-  knopf.hidden = !aufPlan;
-  knopf.classList.toggle("an", sportModus);
-  knopf.setAttribute("aria-pressed", sportModus ? "true" : "false");
-}
+function sportKnopfZeigen() { /* Der Knopf wird mit dem Wochenplan neu gezeichnet. */ }
 
 async function sportSpeichern(montag, sport) {
   const schluessel = datumSchluessel(montag);
@@ -2933,7 +2934,6 @@ async function start() {
   suchzeileScrollEinrichten();
   document.getElementById("einstellungen-knopf").addEventListener("click", einstellungenOeffnen);
   navigationEinrichten();
-  document.getElementById("sport-knopf").addEventListener("click", sportModusUmschalten);
   try {
     db = await datenbankOeffnen();
     await datenMigrieren();

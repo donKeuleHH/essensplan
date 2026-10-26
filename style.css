@@ -810,3 +810,6 @@ main { touch-action: pan-y; }
 .rundknopf-klein { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; color: var(--akzent); background: var(--karte); border: 1px solid var(--linie); border-radius: 50%; box-shadow: var(--erhaben); cursor: pointer; }
 .rundknopf-klein:active { background: var(--karte-hell); }
 :root[data-skin="nacht"] .rundknopf-klein { box-shadow: none; }
+
+.rundknopf-klein.an { color: var(--auf-akzent); background: var(--akzent); border-color: var(--akzent); }
+.rundknopf-klein svg { width: 18px; height: 18px; }
