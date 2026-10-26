@@ -1456,6 +1456,41 @@ function sportZeichenSetzen(karte, istSport, index) {
   }
 }
 
+// Die zuletzt eingeplanten Gerichte (Vergangenheit und laufende Woche), neueste zuerst.
+function zuletztGeplanteGerichte(ohneId, maximal) {
+  const heute = new Date();
+  const heuteSchluessel = datumSchluessel(heute);
+  const dieseWoche = datumSchluessel(montagVon(heute));
+  const juengster = new Map();
+  plaene.forEach(function (plan, woche) {
+    if (woche > dieseWoche) return;
+    const montag = new Date(Number(woche.slice(0, 4)), Number(woche.slice(5, 7)) - 1, Number(woche.slice(8, 10)), 12);
+    (plan.tage || []).forEach(function (id, i) {
+      if (id === null || id === undefined || id === AUSWAERTS) return;
+      const tag = tagVerschieben(montag, i);
+      const k = datumSchluessel(tag);
+      if (!juengster.has(id) || juengster.get(id).k < k) juengster.set(id, { k: k, tag: tag });
+    });
+  });
+  const treffer = [];
+  juengster.forEach(function (v, id) {
+    if (id === ohneId) return;
+    const g = gerichte.find(function (x) { return x.id === id; });
+    if (g) treffer.push({ g: g, k: v.k, tag: v.tag });
+  });
+  treffer.sort(function (a, b) { return a.k < b.k ? 1 : a.k > b.k ? -1 : 0; });
+  return treffer.slice(0, maximal).map(function (t) {
+    const diff = Math.round((new Date(heute.getFullYear(), heute.getMonth(), heute.getDate(), 12) - t.tag) / 86400000);
+    let wann;
+    if (diff < 0) wann = "diese Woche";
+    else if (diff === 0) wann = "heute";
+    else if (diff === 1) wann = "gestern";
+    else if (diff < 14) wann = "vor " + diff + " Tagen";
+    else wann = "vor " + Math.round(diff / 7) + " Wochen";
+    return { g: t.g, wann: wann };
+  });
+}
+
 // Zeigt die Gerichte zur Auswahl für einen Tag der gerade angezeigten Woche.
 function gerichtWaehlen(index, aktuelleId) {
   const montag = angezeigteWoche;
@@ -1463,6 +1498,14 @@ function gerichtWaehlen(index, aktuelleId) {
   const liste = el("div", { style: "margin-top: 14px" });
   const auswahlFilter = { kh: "", ern: "" };
   let suchtext = "";
+  const zuletztListe = zuletztGeplanteGerichte(aktuelleId, 6);
+  const zuletzt = zuletztListe.length === 0 ? null : el("div", { class: "zuletzt" },
+    el("h4", { text: "Zuletzt verwendet" }),
+    el("div", { class: "zuletzt-reihe" }, zuletztListe.map(function (z) {
+      const bild = z.g.bild ? el("img", { class: "zuletzt-bild", src: z.g.bild, alt: "", draggable: "false" }) : kreisBild(z.g.titel, "zuletzt-bild");
+      return el("button", { class: "zuletzt-kachel", type: "button", onclick: function () { tagSetzen(montag, index, z.g.id); } },
+        bild, el("div", { class: "zuletzt-text" }, el("strong", { text: z.g.titel }), el("small", { text: z.wann })));
+    })));
   const kopfzeile = suchZeile({
     zustand: auswahlFilter, wert: "", umschalter: false,
     beiEingabe: function (t) { suchtext = t; listeZeichnen2(); },
@@ -1470,6 +1513,7 @@ function gerichtWaehlen(index, aktuelleId) {
   });
 
   function listeZeichnen2() {
+    if (zuletzt) zuletzt.hidden = !!(suchtext.trim() || auswahlFilter.kh || auswahlFilter.ern);
     const treffer = gerichte
       .filter(function (g) { return gerichtTrifft(g, auswahlFilter, suchtext); })
       .sort(function (a, b) { return a.titel.localeCompare(b.titel, "de"); });
@@ -1505,6 +1549,7 @@ function gerichtWaehlen(index, aktuelleId) {
           })
         : null,
       auswaertsKnopf,
+      zuletzt,
       gerichte.length > 0 ? kopfzeile : null,
       liste
     ]
