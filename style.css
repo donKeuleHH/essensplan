@@ -838,3 +838,16 @@ main { touch-action: pan-y; }
   --eingesenkt: inset 0 2px 6px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }
+
+/* ===== Info-Knopf im Tag-Auswahlfenster ===== */
+.waehl-zeile { position: relative; }
+.waehl-zeile .gericht-karte { padding-right: 58px; }
+.waehl-info {
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font: inherit; font-weight: 700; font-size: 0.95rem; line-height: 1;
+  color: var(--akzent); background: transparent;
+  border: 1.5px solid var(--akzent); cursor: pointer;
+}
+.waehl-info:active { background: var(--akzent-schwach); }

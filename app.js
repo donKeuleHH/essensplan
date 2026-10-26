@@ -611,7 +611,8 @@ function gerichtKarte(g, beiKlick) {
 
 /* ---------- Detailansicht ---------- */
 
-function detailOeffnen(id) {
+// wahl (optional): kommt vom Tag-Auswahlfenster. Dann gibt es „Übernehmen“ und „Zurück“ statt Bearbeiten/Löschen.
+function detailOeffnen(id, wahl) {
   const g = gerichte.find(function (x) { return x.id === id; });
   if (!g) { blattSchliessen(); return; }
 
@@ -687,17 +688,31 @@ function detailOeffnen(id) {
     inhalt.push(el("p", { class: "notizen", text: g.notizen }));
   }
 
-  inhalt.push(el("div", { class: "reihe", style: "margin-top: 28px" },
-    el("button", { class: "knopf knopf-primaer", type: "button", onclick: function () { formularOeffnen(g); }, text: "Bearbeiten" }),
-    el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { gerichtKopieren(g); }, text: "Kopieren" })
-  ));
-  inhalt.push(el("div", { class: "reihe" },
-    el("button", { class: "knopf knopf-gefahr", type: "button", onclick: function () { gerichtLoeschen(g); }, text: "Löschen" })
-  ));
+  if (wahl) {
+    const zurueck = function () { gerichtWaehlen(wahl.index, wahl.aktuelleId); };
+    inhalt.push(el("div", { style: "margin-top: 28px" },
+      el("button", { class: "knopf knopf-primaer", type: "button", style: "width: 100%",
+        onclick: function () { tagSetzen(wahl.montag, wahl.index, g.id); },
+        text: "Für " + TAGNAMEN[wahl.index] + " übernehmen" })
+    ));
+    inhalt.push(el("div", { class: "reihe" },
+      el("button", { class: "knopf knopf-sekundaer", type: "button", style: "width: 100%", onclick: zurueck, text: "Zurück" })
+    ));
+  } else {
+    inhalt.push(el("div", { class: "reihe", style: "margin-top: 28px" },
+      el("button", { class: "knopf knopf-primaer", type: "button", onclick: function () { formularOeffnen(g); }, text: "Bearbeiten" }),
+      el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { gerichtKopieren(g); }, text: "Kopieren" })
+    ));
+    inhalt.push(el("div", { class: "reihe" },
+      el("button", { class: "knopf knopf-gefahr", type: "button", onclick: function () { gerichtLoeschen(g); }, text: "Löschen" })
+    ));
+  }
 
   blattZeigen({
     titel: "Gericht",
-    links: { text: "Schließen", aktion: blattSchliessen },
+    links: wahl
+      ? { text: "Zurück", aktion: function () { gerichtWaehlen(wahl.index, wahl.aktuelleId); } }
+      : { text: "Schließen", aktion: blattSchliessen },
     inhalt: inhalt
   });
 }
@@ -1524,7 +1539,12 @@ function gerichtWaehlen(index, aktuelleId) {
       liste.replaceChildren(el("p", { class: "leise", text: "Kein Gericht gefunden." }));
     } else {
       liste.replaceChildren.apply(liste, treffer.map(function (g) {
-        return gerichtKarte(g, function () { tagSetzen(montag, index, g.id); });
+        return el("div", { class: "waehl-zeile" },
+          gerichtKarte(g, function () { tagSetzen(montag, index, g.id); }),
+          el("button", {
+            class: "waehl-info", type: "button", "aria-label": "Rezept ansehen: " + g.titel, text: "i",
+            onclick: function () { detailOeffnen(g.id, { index: index, montag: montag, aktuelleId: aktuelleId }); }
+          }));
       }));
     }
   }
