@@ -2797,7 +2797,8 @@ const SKINS = [
   { id: "pastell", name: "Pastel garden", art: "hell", meta: "#f7e6e4", farben: ["#f7e6e4", "#fcf1ef", "#c75f71", "#54463a"] },
   { id: "tusche", name: "Ink wash", art: "hell", meta: "#f1f0e2", farben: ["#f1f0e2", "#f9f8ed", "#5f7489", "#3a3a3a"] },
   { id: "sturm", name: "Stormy morning", art: "dunkel", meta: "#2e3c4a", farben: ["#2e3c4a", "#384959", "#88bdf2", "#ebf3fb"] },
-  { id: "nacht", name: "Night Pastel", art: "dunkel", meta: "#121212", farben: ["#121212", "#1c1c1c", "#f6f3a8", "#9dc3d4"] }
+  { id: "nacht", name: "Night Pastel", art: "dunkel", meta: "#121212", farben: ["#121212", "#1c1c1c", "#f6f3a8", "#9dc3d4"] },
+  { id: "dark", name: "Dark Beauty", art: "dunkel", meta: "#0b0d12", farben: ["#0b0d12", "#161a22", "#f5b73c", "#4f9fe3"] }
 ];
 
 function skinLesen() {
