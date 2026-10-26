@@ -377,6 +377,9 @@ function navigationEinrichten() {
       knopf.classList.add("aktiv");
       document.getElementById(knopf.dataset.ziel).classList.add("aktiv");
       titel.textContent = knopf.dataset.titel;
+      sportModusBeenden();
+      sportKnopfZeigen();
+      if (knopf.dataset.ziel === "wochenplan") wochenplanZeichnen();
     });
   });
 }
@@ -1198,6 +1201,7 @@ function standardWoche() {
 let angezeigteWoche = standardWoche();
 
 function wocheWechseln(richtung) {
+  sportModusBeenden();
   angezeigteWoche = tagVerschieben(angezeigteWoche, 7 * richtung);
   wochenAnsichtenZeichnen();
 }
@@ -1297,7 +1301,7 @@ function wochenKopf() {
   if (datumSchluessel(montag) !== datumSchluessel(standard)) {
     aktionen.append(el("button", {
       class: "textknopf", type: "button",
-      onclick: function () { angezeigteWoche = standardWoche(); wochenAnsichtenZeichnen(); },
+      onclick: function () { sportModusBeenden(); angezeigteWoche = standardWoche(); wochenAnsichtenZeichnen(); },
       text: "Zu KW " + kalenderwoche(standard)
     }));
   }
@@ -1330,27 +1334,25 @@ function wochenplanZeichnen() {
     const id = plan ? plan.tage[i] : null;
     // Wurde ein Gericht inzwischen gelöscht, erscheint der Tag wieder als leer.
     const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
-    const istSport = sportTage(plan)[i];
+    const istSport = sportModus && sportAuswahl ? sportAuswahl[i] : sportTage(plan)[i];
     const auswaerts = id === AUSWAERTS;
     const sig = [i, datumSchluessel(tag), datumSchluessel(tag) === heute, auswaerts, g ? g.id + "|" + g.titel + "|" + g.portionen + "|" + (g.bild ? g.bild.length : 0) + "|" + JSON.stringify(g.naehrwerte || null) : ""].join("#");
     // Unveränderte Kachel behalten (kein Neuladen des Bildes, sonst flackert es);
-    // nur das Sport-Abzeichen wird an Ort und Stelle angepasst.
+    // nur das Sport-Zeichen wird an Ort und Stelle angepasst.
     const vorhanden = Array.prototype.find.call(box.children, function (k) { return k.dataset && k.dataset.sig === sig; });
     if (vorhanden) {
-      const kopf = vorhanden.querySelector(".wk-kopf");
-      const badge = kopf.querySelector(".wk-sport");
-      if (istSport && !badge) {
-        const b = el("span", { class: "sport-badge wk-sport", title: "Sporttag" });
-        b.innerHTML = SPORT_ICON;
-        kopf.appendChild(b);
-      } else if (!istSport && badge) badge.remove();
-      vorhanden.setAttribute("aria-label", TAGNAMEN[i] + (istSport ? ", Sporttag" : ""));
+      sportZeichenSetzen(vorhanden, istSport, i);
       teile.push(vorhanden);
     } else {
       const neu = tagKarte(i, tag, g || null, datumSchluessel(tag) === heute, istSport, auswaerts);
       neu.dataset.sig = sig;
       teile.push(neu);
     }
+  }
+  if (sportModus) {
+    teile.splice(2, 0, el("div", { class: "sport-hinweis" },
+      el("span", { text: "Sporttage antippen" }),
+      el("button", { type: "button", onclick: function () { sportModusUmschalten(); }, text: "Fertig" })));
   }
   box.replaceChildren.apply(box, teile);
 }
@@ -1368,11 +1370,6 @@ function tagKarte(index, tag, g, istHeute, istSport, auswaerts) {
   else bild = el("div", { class: "wk-bild wk-leer" }, el("span", { text: "+" }));
   const marke = el("span", { class: "wk-tag" + (istHeute ? " heute" : "") }, TAGKURZ[index] + " · " + kurzDatum(tag));
   const kopf = el("div", { class: "wk-kopf" }, marke);
-  if (istSport) {
-    const badge = el("span", { class: "sport-badge wk-sport", title: "Sporttag" });
-    badge.innerHTML = SPORT_ICON;
-    kopf.appendChild(badge);
-  }
   let text;
   if (auswaerts) {
     text = [el("h3", { text: "Auswärts essen" }), el("p", { text: "Kein Gericht geplant" })];
@@ -1384,11 +1381,42 @@ function tagKarte(index, tag, g, istHeute, istSport, auswaerts) {
   }
   const karte = el("button", {
     class: "wk" + (istHeute ? " heute" : ""), type: "button",
-    "aria-label": TAGNAMEN[index] + (istSport ? ", Sporttag" : ""),
-    onclick: function () { gerichtWaehlen(index, auswaerts ? AUSWAERTS : (g ? g.id : null)); }
+    onclick: function () {
+      if (sportModus && sportAuswahl) {
+        sportAuswahl[index] = !sportAuswahl[index];
+        sportZeichenSetzen(karte, sportAuswahl[index], index);
+      } else {
+        gerichtWaehlen(index, auswaerts ? AUSWAERTS : (g ? g.id : null));
+      }
+    }
   }, el("div", { class: "wk-fenster" }, bild, kopf), el("div", { class: "wk-text" }, text));
-  langDruck(karte, function () { sportUmschalten(angezeigteWoche, index); });
+  sportZeichenSetzen(karte, istSport, index);
   return karte;
+}
+
+// Sport-Zeichen einer Kachel: im Sport-Modus ein Kreis mit Haken, sonst das Hantel-Abzeichen.
+function sportZeichenSetzen(karte, istSport, index) {
+  const kopf = karte.querySelector(".wk-kopf");
+  const fenster = karte.querySelector(".wk-fenster");
+  let badge = kopf.querySelector(".wk-sport");
+  let haken = fenster.querySelector(".wk-haken");
+  if (sportModus) {
+    if (badge) badge.remove();
+    if (!haken) { haken = el("span", { class: "wk-haken" }); fenster.appendChild(haken); }
+    haken.classList.toggle("an", !!istSport);
+    haken.textContent = istSport ? "✓" : "";
+    karte.classList.toggle("gew", !!istSport);
+    karte.setAttribute("aria-label", TAGNAMEN[index] + (istSport ? ", als Sporttag gewählt" : ", kein Sporttag"));
+  } else {
+    if (haken) haken.remove();
+    karte.classList.remove("gew");
+    if (istSport && !badge) {
+      badge = el("span", { class: "sport-badge wk-sport", title: "Sporttag" });
+      badge.innerHTML = SPORT_ICON;
+      kopf.appendChild(badge);
+    } else if (!istSport && badge) badge.remove();
+    karte.setAttribute("aria-label", TAGNAMEN[index] + (istSport ? ", Sporttag" : ""));
+  }
 }
 
 // Zeigt die Gerichte zur Auswahl für einen Tag der gerade angezeigten Woche.
@@ -1455,15 +1483,46 @@ function sportTage(plan) {
 const SPORT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>';
 
 // Langes Drücken auf einen Tag: Sport-Badge an oder aus.
-async function sportUmschalten(montag, index) {
+let sportModus = false;
+let sportAuswahl = null;
+let sportMontag = null;
+
+function sportModusUmschalten() {
+  if (sportModus) { sportModusBeenden(); wochenplanZeichnen(); return; }
+  sportModus = true;
+  sportMontag = angezeigteWoche;
+  sportAuswahl = sportTage(plaene.get(datumSchluessel(sportMontag))).slice();
+  sportKnopfZeigen();
+  wochenplanZeichnen();
+}
+
+// Beendet den Modus und speichert die Auswahl (wenn sie sich geändert hat). Zeichnet nicht selbst neu.
+function sportModusBeenden() {
+  if (!sportModus) return;
+  const montag = sportMontag, auswahl = sportAuswahl;
+  sportModus = false; sportAuswahl = null; sportMontag = null;
+  sportKnopfZeigen();
+  const alt = plaene.get(datumSchluessel(montag));
+  const vorher = sportTage(alt);
+  if (auswahl.every(function (v, i) { return !!v === !!vorher[i]; })) return;
+  sportSpeichern(montag, auswahl);
+}
+
+function sportKnopfZeigen() {
+  const knopf = document.getElementById("sport-knopf");
+  const aufPlan = document.getElementById("wochenplan").classList.contains("aktiv");
+  knopf.hidden = !aufPlan;
+  knopf.classList.toggle("an", sportModus);
+  knopf.setAttribute("aria-pressed", sportModus ? "true" : "false");
+}
+
+async function sportSpeichern(montag, sport) {
   const schluessel = datumSchluessel(montag);
   const alt = plaene.get(schluessel);
-  const sport = sportTage(alt);
-  sport[index] = !sport[index];
   const plan = {
     woche: schluessel,
     tage: alt ? alt.tage.slice() : [null, null, null, null, null],
-    sport: sport,
+    sport: sport.map(function (v) { return !!v; }),
     aktualisiert: zeitNach(alt),
     dirty: 1
   };
@@ -2751,6 +2810,7 @@ async function start() {
   suchzeileScrollEinrichten();
   document.getElementById("einstellungen-knopf").addEventListener("click", einstellungenOeffnen);
   navigationEinrichten();
+  document.getElementById("sport-knopf").addEventListener("click", sportModusUmschalten);
   try {
     db = await datenbankOeffnen();
     await datenMigrieren();
