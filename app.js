@@ -1412,16 +1412,16 @@ function gerichtWaehlen(index, aktuelleId) {
     titel: TAGNAMEN[index] + ", " + kurzDatum(tag),
     links: { text: "Abbrechen", aktion: blattSchliessen },
     inhalt: [
-      auswaertsKnopf,
-      gerichte.length > 0 ? kopfzeile : null,
-      liste,
       aktuelleId !== null && aktuelleId !== undefined
         ? el("button", {
-            class: "knopf knopf-gefahr", type: "button", style: "width: 100%; margin-top: 8px",
+            class: "knopf knopf-gefahr", type: "button", style: "width: 100%",
             onclick: function () { tagSetzen(montag, index, null); },
             text: aktuelleId === AUSWAERTS ? "Auswärts essen entfernen" : "Gericht für diesen Tag entfernen"
           })
-        : null
+        : null,
+      auswaertsKnopf,
+      gerichte.length > 0 ? kopfzeile : null,
+      liste
     ]
   });
 }
