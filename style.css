@@ -895,3 +895,12 @@ main { touch-action: pan-y; }
   -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
 }
 .zuletzt-info:active { background: rgba(14, 17, 22, 0.8); }
+
+/* ===== "Neu von …" bei eigenen Artikeln ===== */
+.posten.neu { border-color: var(--akzent); }
+.posten .posten-neu {
+  position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
+  padding: 2px 8px; border-radius: 9px; font-size: 0.6rem; font-weight: 800; letter-spacing: 0.05em;
+  color: var(--auf-akzent); background: var(--akzent);
+}
+.posten .posten-von { flex: none; font-size: 0.68rem; font-weight: 600; color: var(--akzent); margin-top: -4px; }

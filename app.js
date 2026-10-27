@@ -372,6 +372,8 @@ function navigationEinrichten() {
         if (haupt) haupt.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
+      const vorher = document.querySelector("nav button.aktiv");
+      if (vorher && vorher.dataset.ziel === "einkauf") einkaufGesehenMerken();
       reiter.forEach(function (k) { k.classList.remove("aktiv"); });
       ansichten.forEach(function (a) { a.classList.remove("aktiv"); });
       knopf.classList.add("aktiv");
@@ -380,6 +382,7 @@ function navigationEinrichten() {
       modiBeenden();
       sportKnopfZeigen();
       if (knopf.dataset.ziel === "wochenplan") wochenplanZeichnen();
+      if (knopf.dataset.ziel === "einkauf") einkaufZeichnen();
     });
   });
 }
@@ -1937,6 +1940,35 @@ function mengeText(p) {
 }
 
 // Die eigenen Artikel einer Woche (ohne gelöschte), nach Name sortiert.
+// ---- "Neu von …": eigene Artikel, die die andere Person seit meinem letzten Blick auf die Liste ergänzt hat ----
+function eigeneId() { return sbSitzung && sbSitzung.user && sbSitzung.user.id ? sbSitzung.user.id : ""; }
+function eigenerName() {
+  try { const n = (localStorage.getItem("essensplan-name") || "").trim(); if (n) return n; } catch (e) {}
+  const mail = sbSitzung && sbSitzung.user && sbSitzung.user.email ? sbSitzung.user.email : "";
+  const teil = mail.split("@")[0].replace(/[._-]+/g, " ").trim().split(" ")[0] || "";
+  return teil ? teil.charAt(0).toUpperCase() + teil.slice(1) : "";
+}
+let einkaufGesehen = (function () {
+  try {
+    const w = Number(localStorage.getItem("essensplan-einkauf-gesehen"));
+    if (w > 0) return w;
+    localStorage.setItem("essensplan-einkauf-gesehen", String(Date.now()));
+  } catch (e) {}
+  return Date.now();
+})();
+function einkaufGesehenMerken() {
+  einkaufGesehen = Date.now();
+  try { localStorage.setItem("essensplan-einkauf-gesehen", String(einkaufGesehen)); } catch (e) {}
+}
+function extraIstNeu(e) {
+  const ich = eigeneId();
+  return !!(ich && e.vonId && e.vonId !== ich && e.erstellt > einkaufGesehen && !e.erledigt && !e.geloescht);
+}
+document.addEventListener("visibilitychange", function () {
+  const k = document.querySelector("nav button.aktiv");
+  if (document.visibilityState === "hidden" && k && k.dataset.ziel === "einkauf") einkaufGesehenMerken();
+});
+
 function extrasFuer(woche) {
   return Array.from(extras.values()).filter(function (e) { return e.woche === woche && !e.geloescht; })
     .sort(function (a, b) { return a.name.localeCompare(b.name, "de"); });
@@ -2078,15 +2110,18 @@ function extraEingabe(woche) {
 }
 
 function extraZeile(e) {
+  const neu = extraIstNeu(e);
   const kachel = el("button", {
-    class: "posten eigen" + (e.erledigt ? " erledigt" : ""), type: "button", role: "checkbox",
+    class: "posten eigen" + (e.erledigt ? " erledigt" : "") + (neu ? " neu" : ""), type: "button", role: "checkbox",
     "aria-checked": e.erledigt ? "true" : "false",
     onclick: function () { extraUmschalten(e.id); }
   },
     el("span", { class: "haken", text: e.erledigt ? "✓" : "" }),
     symbolKnoten(e.name),
     el("span", { class: "posten-name", text: e.name }),
-    el("span", { class: "posten-menge", text: e.menge || "" })
+    el("span", { class: "posten-menge", text: e.menge || "" }),
+    neu ? el("span", { class: "posten-neu", text: "NEU" }) : null,
+    neu && e.von ? el("span", { class: "posten-von", text: "von " + e.von }) : null
   );
   // Eigene Artikel entfernt man durch langes Drücken.
   langDruck(kachel, function () {
@@ -2144,12 +2179,14 @@ async function extraHinzufuegen(woche, nameText, mengeText2) {
     // Noch offen: Mengen zusammenzählen. Schon abgehakt (also gekauft): neu auf die Liste, mit der neuen Menge.
     const neueMenge = vorhanden.erledigt ? (menge || vorhanden.menge) : extraMengenSummieren(vorhanden.menge || "", menge);
     await extraSpeichern([Object.assign({}, vorhanden, {
-      erledigt: false, menge: neueMenge, aktualisiert: zeitNach(vorhanden), dirty: 1
+      erledigt: false, menge: neueMenge, erstellt: Date.now(), von: eigenerName(), vonId: eigeneId(),
+      aktualisiert: zeitNach(vorhanden), dirty: 1
     })]);
     return;
   }
   await extraSpeichern([{
     id: neueId(), woche: woche, name: name, menge: menge, erledigt: false, geloescht: false,
+    erstellt: Date.now(), von: eigenerName(), vonId: eigeneId(),
     aktualisiert: Date.now(), dirty: 1
   }]);
 }
@@ -2630,7 +2667,8 @@ const SYNC_TABELLEN = [
     schluesselServer: function (z) { return z.id; },
     zuServer: function (e) {
       return {
-        id: e.id, woche: e.woche, daten: { name: e.name, menge: e.menge || "" },
+        id: e.id, woche: e.woche,
+        daten: { name: e.name, menge: e.menge || "", erstellt: e.erstellt || 0, von: e.von || "", vonId: e.vonId || "" },
         erledigt: !!e.erledigt, geloescht: !!e.geloescht, aktualisiert: e.aktualisiert
       };
     },
@@ -2638,6 +2676,7 @@ const SYNC_TABELLEN = [
       const d = z.daten || {};
       return {
         id: z.id, woche: z.woche, name: d.name || "", menge: d.menge || "",
+        erstellt: d.erstellt || 0, von: d.von || "", vonId: d.vonId || "",
         erledigt: !!z.erledigt, geloescht: !!z.geloescht, aktualisiert: z.aktualisiert
       };
     }
@@ -3031,6 +3070,11 @@ function einstellungenOeffnen() {
   zeichnen();
   const pushBox = el("div");
   pushBereichZeichnen(pushBox);
+  const nameFeld = el("input", { type: "text", class: "eingabe", id: "mein-name", autocomplete: "off", placeholder: "z. B. Philip", "aria-label": "Dein Name" });
+  nameFeld.value = eigenerName();
+  nameFeld.addEventListener("input", function () {
+    try { localStorage.setItem("essensplan-name", nameFeld.value.trim()); } catch (e) {}
+  });
   blattZeigen({
     titel: "Einstellungen",
     links: { text: "Schließen", aktion: blattSchliessen },
@@ -3038,6 +3082,9 @@ function einstellungenOeffnen() {
       el("h3", { class: "abschnitt", text: "Farbvariante" }),
       liste,
       el("p", { class: "leise", style: "margin-top: 16px", text: "Die Wahl gilt nur für dieses Gerät." }),
+      el("h3", { class: "abschnitt", text: "Dein Name" }),
+      nameFeld,
+      el("p", { class: "leise", style: "margin-top: 8px", text: "Erscheint bei „neu von …“ in der Einkaufsliste, wenn du einen Artikel hinzufügst." }),
       el("h3", { class: "abschnitt", text: "Mitteilungen" }),
       pushBox
     ]
