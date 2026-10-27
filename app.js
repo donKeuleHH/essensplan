@@ -1300,7 +1300,8 @@ function wochenAnsichtenZeichnen() {
 }
 
 // Kopfzeile mit Blätter-Pfeilen, in Wochenplan und Einkaufsliste identisch.
-function wochenKopf() {
+// icons (optional): eigene Rundknöpfe statt „Plan teilen“, z. B. auf der Zutaten-Seite.
+function wochenKopf(icons) {
   const montag = angezeigteWoche;
   const freitag = tagVerschieben(montag, 4);
   const standard = standardWoche();
@@ -1324,12 +1325,20 @@ function wochenKopf() {
   } else {
     aktionen.append(el("span"));
   }
-  const icons = el("div", { class: "woche-icons" });
-  icons.append(el("button", {
-    class: "rundknopf-klein", type: "button", "aria-label": "Plan teilen", title: "Plan teilen",
-    onclick: function () { planTeilenOeffnen(); }
-  }, teilenIconKnoten()));
-  aktionen.append(icons);
+  const iconBox = el("div", { class: "woche-icons" });
+  if (icons) {
+    icons.forEach(function (i) {
+      iconBox.append(el("button", {
+        class: "rundknopf-klein", type: "button", "aria-label": i.beschriftung, title: i.beschriftung, onclick: i.aktion
+      }, i.knoten));
+    });
+  } else {
+    iconBox.append(el("button", {
+      class: "rundknopf-klein", type: "button", "aria-label": "Plan teilen", title: "Plan teilen",
+      onclick: function () { planTeilenOeffnen(); }
+    }, teilenIconKnoten()));
+  }
+  aktionen.append(iconBox);
   teile.push(aktionen);
   return teile;
 }
@@ -1907,7 +1916,23 @@ function einkaufZeichnen() {
   const erledigt = alle.filter(function (x) { return x.erledigt; });
 
   const hatteFokus = extraOffen && document.activeElement && document.activeElement.id === "extra-name";
-  const teile = wochenKopf();
+  const kopfIcons = [];
+  if (erledigt.length > 0) {
+    const haken = el("span", { "aria-hidden": "true" });
+    haken.innerHTML = HAKEN_ICON;
+    kopfIcons.push({ beschriftung: "Haken entfernen", knoten: haken, aktion: function () { hakenZuruecksetzen(montag); } });
+  }
+  if (offen.length > 0) {
+    kopfIcons.push({
+      beschriftung: "Liste teilen", knoten: teilenIconKnoten(),
+      aktion: function () {
+        einkaufTeilen(montag,
+          offen.filter(function (x) { return x.quelle === "rezept"; }).map(function (x) { return x.p; }),
+          offen.filter(function (x) { return x.quelle === "eigen"; }).map(function (x) { return x.e; }));
+      }
+    });
+  }
+  const teile = wochenKopf(kopfIcons);
   teile.push(extraEingabe(woche));
 
   function zeile(x) {
@@ -1925,32 +1950,6 @@ function einkaufZeichnen() {
       el("p", { text: "Die geplanten Gerichte haben keine Zutaten eingetragen." })
     ));
   } else {
-    const quellen = [];
-    if (ergebnis.anzahlGerichte > 0) {
-      quellen.push("Aus " + ergebnis.anzahlGerichte + (ergebnis.anzahlGerichte === 1 ? " geplantem Gericht" : " geplanten Gerichten"));
-    }
-    if (eigene.length > 0) quellen.push(eigene.length + (eigene.length === 1 ? " eigener Artikel" : " eigene Artikel"));
-    teile.push(el("p", {
-      class: "leise einkauf-info",
-      text: quellen.join(" + ") + " · " + erledigt.length + " von " + alle.length + " erledigt"
-    }));
-
-    const knoepfe = [];
-    if (offen.length > 0) {
-      knoepfe.push(el("button", {
-        class: "knopf knopf-sekundaer", type: "button", text: "Liste teilen",
-        onclick: function () {
-          einkaufTeilen(montag,
-            offen.filter(function (x) { return x.quelle === "rezept"; }).map(function (x) { return x.p; }),
-            offen.filter(function (x) { return x.quelle === "eigen"; }).map(function (x) { return x.e; }));
-        }
-      }));
-    }
-    if (erledigt.length > 0) {
-      knoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { hakenZuruecksetzen(montag); }, text: "Haken entfernen" }));
-    }
-    if (knoepfe.length > 0) teile.push(el("div", { class: "reihe" }, knoepfe));
-
     if (offen.length > 0) {
       teile.push(el("div", { class: "posten-liste" }, offen.map(zeile)));
     } else {
@@ -2197,6 +2196,7 @@ async function einkaufTeilen(montag, offene, eigeneOffen) {
 
 /* ---------- Wochenplan als Bild teilen ---------- */
 
+const HAKEN_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const TEILEN_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
 
 function teilenIconKnoten() {
