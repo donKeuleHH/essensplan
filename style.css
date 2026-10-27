@@ -916,3 +916,15 @@ body, button, input, select, textarea {
 
 /* Pfeil-Zeichen (‹ ›) kommen in Nunito sehr klein heraus, deshalb hier die Systemschrift */
 .pfeil, .import-pfeil { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+/* Vorrat */
+.vorrat-form { display: grid; grid-template-columns: 1fr 48px; gap: 8px; margin: 4px 0 14px; }
+.vorrat-form .eingabe { min-width: 0; }
+.vorrat-zeile { display: flex; align-items: center; gap: 12px; padding: 8px 12px; margin-bottom: 8px; background: var(--karte); border: 1px solid var(--linie); border-radius: 14px; }
+.vorrat-zeile .symbol { font-size: 1.5rem; }
+.vorrat-zeile .posten-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.vorrat-x { flex: none; width: 34px; height: 34px; padding: 0; border: 0; background: transparent; color: var(--text-leise); font-size: 1rem; cursor: pointer; }
+.vorrat-icon { display: grid; place-items: center; }
+.vorrat-icon svg { width: 20px; height: 20px; }
+.vorrat-aus { margin: 16px 2px 0; color: var(--text-leise); font-size: 0.9rem; }
+.vorrat-aus summary { cursor: pointer; padding: 6px 0; }

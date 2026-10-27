@@ -15,7 +15,7 @@ let db = null;
 
 function datenbankOeffnen() {
   return new Promise(function (resolve, reject) {
-    const anfrage = indexedDB.open("essensplan", 5);
+    const anfrage = indexedDB.open("essensplan", 6);
     anfrage.onupgradeneeded = function () {
       const d = anfrage.result;
       if (!d.objectStoreNames.contains("gerichte")) {
@@ -37,6 +37,10 @@ function datenbankOeffnen() {
       // Ab Version 5: eigene Artikel auf der Einkaufsliste (ein Eintrag pro Artikel und Woche)
       if (!d.objectStoreNames.contains("extras")) {
         d.createObjectStore("extras", { keyPath: "id" });
+      }
+      // Ab Version 6: Vorrat (Zutaten, die immer da sind und nicht auf die Einkaufsliste sollen)
+      if (!d.objectStoreNames.contains("vorrat")) {
+        d.createObjectStore("vorrat", { keyPath: "id" });
       }
     };
     anfrage.onsuccess = function () { resolve(anfrage.result); };
@@ -319,6 +323,7 @@ let gerichteRoh = new Map(); // alle Gerichte inkl. gelöschter (der Löschmarke
 let gerichte = [];           // nur die sichtbaren Gerichte
 let plaene = new Map();      // Wochenpläne: Schlüssel = Datum des Montags, z. B. "2026-10-19"
 let haken = new Map();       // abgehakte Einkaufsposten: Schlüssel = "Woche|Posten"
+let vorrat = new Map();      // Vorrat: Schlüssel = id (inkl. gelöschter)
 let extras = new Map();      // eigene Artikel auf der Einkaufsliste: Schlüssel = id (inkl. gelöschter, für Vorschläge)
 let extraEntwurf = { name: "", menge: "", einheit: "Stück" }; // halb getippter Artikel bleibt beim Neuzeichnen erhalten
 
@@ -1969,6 +1974,110 @@ document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "hidden" && k && k.dataset.ziel === "einkauf") einkaufGesehenMerken();
 });
 
+/* ---------- Vorrat: Zutaten, die immer da sind ---------- */
+
+const VORRAT_ICON = '<svg viewBox="0 0 32 32" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4v24M27 4v24"/><path d="M5 16.5h22M5 28h22"/><rect x="8.5" y="8" width="6" height="8.5" rx=".5"/><path d="M8.5 11h6"/><rect x="17" y="11.5" width="5" height="5" rx=".5"/><rect x="8.5" y="21" width="5" height="7" rx=".5"/><rect x="16" y="19.5" width="7" height="8.5" rx=".5"/><path d="M16 22.5h7"/></svg>';
+
+function vorratIconKnoten() {
+  const e = el("span", { class: "vorrat-icon" });
+  e.innerHTML = VORRAT_ICON;
+  return e;
+}
+
+function vorratAktiv() {
+  return Array.from(vorrat.values()).filter(function (v) { return !v.geloescht; })
+    .sort(function (a, b) { return a.name.localeCompare(b.name, "de"); });
+}
+
+function vorratNamenSet() {
+  return new Set(vorratAktiv().map(function (v) { return v.name.trim().toLowerCase(); }));
+}
+
+async function vorratSpeichern(eintraege) {
+  eintraege.forEach(function (v) { vorrat.set(v.id, v); });
+  einkaufZeichnen();
+  vorratListeZeichnen();
+  try {
+    await transaktion(["vorrat"], function (st) { eintraege.forEach(function (v) { st.vorrat.put(v); }); });
+    await vorratNeuLaden();
+    syncAnstossen();
+  } catch (fehler) {
+    alert("Das Speichern hat leider nicht geklappt.");
+  }
+}
+
+async function vorratHinzufuegen(nameText) {
+  let name = nameText.trim();
+  if (name === "") return;
+  name = name.charAt(0).toUpperCase() + name.slice(1);
+  const vorhanden = Array.from(vorrat.values()).find(function (v) { return v.name.trim().toLowerCase() === name.toLowerCase(); });
+  if (vorhanden) {
+    if (!vorhanden.geloescht) return;
+    await vorratSpeichern([Object.assign({}, vorhanden, { name: name, geloescht: false, aktualisiert: zeitNach(vorhanden), dirty: 1 })]);
+    return;
+  }
+  await vorratSpeichern([{ id: neueId(), name: name, geloescht: false, aktualisiert: Date.now(), dirty: 1 }]);
+}
+
+async function vorratEntfernen(id) {
+  const v = vorrat.get(id);
+  if (!v) return;
+  await vorratSpeichern([Object.assign({}, v, { geloescht: true, aktualisiert: zeitNach(v), dirty: 1 })]);
+}
+
+let vorratListeKnoten = null;
+
+function vorratListeZeichnen() {
+  const box = vorratListeKnoten;
+  if (!box || !document.body.contains(box)) return;
+  const eintraege = vorratAktiv();
+  if (eintraege.length === 0) {
+    box.replaceChildren(el("p", { class: "leise", text: "Noch nichts im Vorrat." }));
+    return;
+  }
+  box.replaceChildren.apply(box, eintraege.map(function (v) {
+    return el("div", { class: "vorrat-zeile" },
+      symbolKnoten(v.name),
+      el("span", { class: "posten-name", text: v.name }),
+      el("button", {
+        class: "vorrat-x", type: "button", "aria-label": v.name + " aus dem Vorrat entfernen", text: "✕",
+        onclick: function () { vorratEntfernen(v.id); }
+      })
+    );
+  }));
+}
+
+function vorratOeffnen() {
+  const feld = el("input", {
+    type: "text", id: "vorrat-name", class: "eingabe", autocomplete: "off", autocapitalize: "sentences",
+    placeholder: "Artikel, den du immer hast …", "aria-label": "Vorratsartikel"
+  });
+  const formular = el("form", {
+    class: "vorrat-form",
+    onsubmit: function (e) {
+      e.preventDefault();
+      const text = feld.value;
+      feld.value = "";
+      vorratHinzufuegen(text);
+      feld.focus();
+    }
+  },
+    feld,
+    el("button", { class: "knopf knopf-primaer extra-plus", type: "submit", "aria-label": "Zum Vorrat hinzufügen", text: "+" })
+  );
+  vorratListeKnoten = el("div", { class: "vorrat-liste" });
+  blattZeigen({
+    titel: "Vorrat",
+    links: { text: "Schließen", aktion: function () { blattSchliessen(); vorratListeKnoten = null; } },
+    inhalt: [
+      formular,
+      vorratListeKnoten,
+      el("p", { class: "leise hinweis-klein", text: "Diese Zutaten erscheinen nicht in der Einkaufsliste. Das gilt für jede Woche und auf beiden Handys." })
+    ]
+  });
+  vorratListeZeichnen();
+}
+
 function extrasFuer(woche) {
   return Array.from(extras.values()).filter(function (e) { return e.woche === woche && !e.geloescht; })
     .sort(function (a, b) { return a.name.localeCompare(b.name, "de"); });
@@ -1979,6 +2088,14 @@ function einkaufZeichnen() {
   const montag = angezeigteWoche;
   const woche = datumSchluessel(montag);
   const ergebnis = einkaufslisteBerechnen(montag);
+  // Zutaten, die im Vorrat stehen, kommen nicht auf die Liste (eigene Artikel bleiben, die hat man bewusst eingetragen).
+  const vorratNamen = vorratNamenSet();
+  const ausgeblendet = [];
+  ergebnis.posten = ergebnis.posten.filter(function (p) {
+    if (!vorratNamen.has(p.name.trim().toLowerCase())) return true;
+    if (ausgeblendet.indexOf(p.name) < 0) ausgeblendet.push(p.name);
+    return false;
+  });
   const abgehakt = abgehakteFuer(woche);
   const eigene = extrasFuer(woche);
 
@@ -1994,7 +2111,7 @@ function einkaufZeichnen() {
   const erledigt = alle.filter(function (x) { return x.erledigt; });
 
   const hatteFokus = extraOffen && document.activeElement && document.activeElement.id === "extra-name";
-  const kopfIcons = [];
+  const kopfIcons = [{ beschriftung: "Vorrat", knoten: vorratIconKnoten(), aktion: vorratOeffnen }];
   if (offen.length > 0) {
     kopfIcons.push({
       beschriftung: "Liste teilen", knoten: teilenIconKnoten(),
@@ -2018,7 +2135,7 @@ function einkaufZeichnen() {
       el("h2", { text: "Noch nichts zu kaufen" }),
       el("p", { text: "Für diese Woche ist noch kein Gericht geplant. Wähle sie im Reiter „Wochenplan“ aus oder füge oben einen eigenen Artikel hinzu." })
     ));
-  } else if (alle.length === 0) {
+  } else if (alle.length === 0 && ausgeblendet.length === 0) {
     teile.push(el("div", { class: "karte" },
       el("p", { text: "Die geplanten Gerichte haben keine Zutaten eingetragen." })
     ));
@@ -2035,6 +2152,12 @@ function einkaufZeichnen() {
   }
   if (eigene.length > 0) {
     teile.push(el("p", { class: "leise hinweis-klein", text: "Eigene Artikel: gedrückt halten zum Entfernen." }));
+  }
+  if (ausgeblendet.length > 0) {
+    teile.push(el("details", { class: "vorrat-aus" },
+      el("summary", { text: ausgeblendet.length + " Vorratsartikel ausgeblendet" }),
+      el("p", { class: "leise", text: ausgeblendet.sort(function (a, b) { return a.localeCompare(b, "de"); }).join(", ") })
+    ));
   }
   zuletztVerwendet(woche).forEach(function (n) { teile.push(n); });
   box.replaceChildren.apply(box, teile);
@@ -2592,11 +2715,18 @@ const extrasNeuLaden = ladefunktion("extras", function (liste) {
   einkaufZeichnen();
 });
 
+const vorratNeuLaden = ladefunktion("vorrat", function (liste) {
+  vorrat = new Map(liste.map(function (v) { return [v.id, v]; }));
+  vorratListeZeichnen();
+  einkaufZeichnen();
+});
+
 async function alleNeuLaden() {
   await gerichteNeuLaden();
   await plaeneNeuLaden();
   await hakenNeuLaden();
   await extrasNeuLaden();
+  await vorratNeuLaden();
 }
 
 /* ---------- Synchronisierung mit Supabase ---------- */
@@ -2690,6 +2820,19 @@ const SYNC_TABELLEN = [
         erstellt: d.erstellt || 0, von: d.von || "", vonId: d.vonId || "",
         erledigt: !!z.erledigt, geloescht: !!z.geloescht, aktualisiert: z.aktualisiert
       };
+    }
+  },
+  {
+    name: "vorrat", speicher: "vorrat", konflikt: "id", block: 50,
+    liste: function () { return Array.from(vorrat.values()); },
+    holen: function (schluessel) { return vorrat.get(schluessel); },
+    neuLaden: function () { return vorratNeuLaden(); },
+    schluesselLokal: function (r) { return r.id; },
+    schluesselServer: function (z) { return z.id; },
+    zuServer: function (v) { return { id: v.id, daten: { name: v.name }, geloescht: !!v.geloescht, aktualisiert: v.aktualisiert }; },
+    vonServer: function (z) {
+      const d = z.daten || {};
+      return { id: z.id, name: d.name || "", geloescht: !!z.geloescht, aktualisiert: z.aktualisiert };
     }
   }
 ];
