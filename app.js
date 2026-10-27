@@ -611,6 +611,47 @@ function gerichtKarte(g, beiKlick) {
 
 /* ---------- Detailansicht ---------- */
 
+// Zeigt den Zubereitungstext hübscher an: "1. …"-Zeilen werden zu nummerierten Schritt-Karten,
+// "Abschnitt:"-Zeilen zu Zwischenüberschriften, Zeitangaben und Quelle klein und grau.
+// Ohne nummerierte Zeilen bleibt es einfacher Text. Gespeichert wird immer der Originaltext.
+function zubereitungKnoten(text) {
+  const zeilen = String(text || "").split(/\r?\n/);
+  const schrittRegel = /^\s*(?:schritt\s*)?(\d{1,2})\s*[.):]\s+(\S.*)$/i;
+  if (!zeilen.some(function (z) { return schrittRegel.test(z); })) {
+    return el("p", { class: "notizen", text: text });
+  }
+  const box = el("div", { class: "zub" });
+  let absatz = [];
+  function absatzAbschliessen() {
+    if (absatz.length) box.append(el("p", { class: "notizen zub-text", text: absatz.join("\n") }));
+    absatz = [];
+  }
+  zeilen.forEach(function (roh) {
+    const z = roh.trim();
+    if (z === "") { absatzAbschliessen(); return; }
+    const s = schrittRegel.exec(z);
+    if (s) {
+      absatzAbschliessen();
+      box.append(el("div", { class: "zub-schritt" },
+        el("span", { class: "zub-nr", text: s[1] }),
+        el("div", { class: "zub-satz", text: s[2] })));
+    } else if (/^(vorbereiten|zubereitung|kochen|backen|gesamt|ruhen)\b.*\bmin\b/i.test(z)) {
+      absatzAbschliessen();
+      box.append(el("p", { class: "zub-meta", text: z }));
+    } else if (/^quelle:/i.test(z)) {
+      absatzAbschliessen();
+      box.append(el("p", { class: "zub-quelle", text: z }));
+    } else if (z.length <= 60 && /:$/.test(z)) {
+      absatzAbschliessen();
+      box.append(el("h4", { class: "zub-abschnitt", text: z.slice(0, -1) }));
+    } else {
+      absatz.push(z);
+    }
+  });
+  absatzAbschliessen();
+  return box;
+}
+
 // wahl (optional): kommt vom Tag-Auswahlfenster. Dann gibt es „Übernehmen“ und „Zurück“ statt Bearbeiten/Löschen.
 function detailOeffnen(id, wahl) {
   const g = gerichte.find(function (x) { return x.id === id; });
@@ -685,7 +726,7 @@ function detailOeffnen(id, wahl) {
 
   if (g.notizen) {
     inhalt.push(el("h3", { class: "abschnitt", text: "Zubereitung" }));
-    inhalt.push(el("p", { class: "notizen", text: g.notizen }));
+    inhalt.push(zubereitungKnoten(g.notizen));
   }
 
   if (wahl) {
