@@ -2346,9 +2346,8 @@ async function planBildErzeugen(montag) {
   const BG = farbe("--bg", "#2a313c"), KARTE = farbe("--karte", "#323a47"), AKZENT = farbe("--akzent", "#f5b73c");
   const TEXT = farbe("--text", "#eef1f5"), LEISE = farbe("--text-leise", "#9aa5b5");
   const SPORT = farbe("--sport", "#4f9fe3"), AUF_SPORT = farbe("--auf-sport", "#ffffff");
-  const nunito = document.documentElement.dataset.skin === "nacht";
-  const SCHRIFT = (nunito ? '"Nunito", ' : "") + '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-  if (nunito && document.fonts && document.fonts.load) {
+  const SCHRIFT = '"Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  if (document.fonts && document.fonts.load) {
     try { await Promise.all(["400 30px Nunito", "700 40px Nunito", "800 52px Nunito"].map(function (f) { return document.fonts.load(f); })); } catch (e) { /* dann eben Systemschrift */ }
   }
 
