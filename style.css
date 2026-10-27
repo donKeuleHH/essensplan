@@ -886,3 +886,12 @@ main { touch-action: pan-y; }
 .zub-abschnitt { margin: 16px 2px 8px; font-size: 0.9rem; font-weight: 700; color: var(--akzent); }
 .zub-text { margin: 8px 2px; }
 .zub-quelle { margin: 12px 2px 0; font-size: 0.78rem; color: var(--text-leise); overflow-wrap: anywhere; }
+
+/* ===== Info-Knopf auf den "Zuletzt verwendet"-Kacheln ===== */
+.zuletzt-zelle { position: relative; flex: none; }
+.zuletzt-info {
+  top: 6px; right: 6px; transform: none; width: 28px; height: 28px; font-size: 0.82rem;
+  color: #fff; border-color: rgba(255, 255, 255, 0.85); background: rgba(14, 17, 22, 0.55);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+.zuletzt-info:active { background: rgba(14, 17, 22, 0.8); }

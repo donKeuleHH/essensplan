@@ -1569,8 +1569,13 @@ function gerichtWaehlen(index, aktuelleId) {
     el("h4", { text: "Zuletzt verwendet" }),
     el("div", { class: "zuletzt-reihe" }, zuletztListe.map(function (z) {
       const bild = z.g.bild ? el("img", { class: "zuletzt-bild", src: z.g.bild, alt: "", draggable: "false" }) : kreisBild(z.g.titel, "zuletzt-bild");
-      return el("button", { class: "zuletzt-kachel", type: "button", onclick: function () { tagSetzen(montag, index, z.g.id); } },
-        bild, el("div", { class: "zuletzt-text" }, el("strong", { text: z.g.titel }), el("small", { text: z.wann })));
+      return el("div", { class: "zuletzt-zelle" },
+        el("button", { class: "zuletzt-kachel", type: "button", onclick: function () { tagSetzen(montag, index, z.g.id); } },
+          bild, el("div", { class: "zuletzt-text" }, el("strong", { text: z.g.titel }), el("small", { text: z.wann }))),
+        el("button", {
+          class: "waehl-info zuletzt-info", type: "button", "aria-label": "Rezept ansehen: " + z.g.titel, text: "i",
+          onclick: function () { detailOeffnen(z.g.id, { index: index, montag: montag, aktuelleId: aktuelleId }); }
+        }));
     })));
   const kopfzeile = suchZeile({
     zustand: auswahlFilter, wert: "", umschalter: false,
