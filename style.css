@@ -758,7 +758,8 @@ main { touch-action: pan-y; }
 .extra-form[hidden] { display: none; }
 
 /* ===== Wochenplan als Kacheln ===== */
-#wochenplan.aktiv { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-content: start; }
+#wochenplan.aktiv { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; align-content: start; }
+#wochenplan > .wk, #wochenplan > .sport-hinweis { margin-bottom: 10px; } /* Zeilenabstand über Ränder, damit Kopf und Aktionszeile gleich eng stehen wie bei der Einkaufsliste */
 #wochenplan > :not(.wk) { grid-column: 1 / -1; }
 .wk { display: block; width: 100%; padding: 0; text-align: left; font: inherit; color: inherit; background: var(--karte); border: 1px solid var(--linie); border-radius: 22px; overflow: hidden; box-shadow: var(--erhaben); cursor: pointer; }
 .wk:active { background: var(--karte-hell); }
