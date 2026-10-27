@@ -904,3 +904,16 @@ main { touch-action: pan-y; }
   color: var(--auf-akzent); background: var(--akzent);
 }
 .posten .posten-von { flex: none; font-size: 0.68rem; font-weight: 600; color: var(--akzent); margin-top: -4px; }
+
+/* ===== Schrift Nunito für das Design Night Pastel ===== */
+@font-face {
+  font-family: "Nunito"; font-style: normal; font-weight: 200 1000; font-display: swap;
+  src: url("fonts/nunito-latin.woff2") format("woff2");
+}
+:root[data-skin="nacht"] body,
+:root[data-skin="nacht"] button,
+:root[data-skin="nacht"] input,
+:root[data-skin="nacht"] select,
+:root[data-skin="nacht"] textarea {
+  font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}

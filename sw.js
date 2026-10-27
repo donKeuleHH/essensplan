@@ -2,7 +2,7 @@
 // Strategie: Wenn das Netz da ist, wird immer die neueste Version geladen.
 // Ohne Netz startet die App aus dem Zwischenspeicher (offline).
 // Bei Änderungen an der Dateiliste unten die Versionsnummer erhöhen.
-const VERSION = "essensplan-v73";
+const VERSION = "essensplan-v74";
 const DATEIEN = [
   "./",
   "index.html",
@@ -13,7 +13,8 @@ const DATEIEN = [
   "manifest.webmanifest",
   "app-icon-192.png",
   "app-icon-512.png",
-  "app-icon-180.png"
+  "app-icon-180.png",
+  "fonts/nunito-latin.woff2"
 ];
 
 self.addEventListener("install", function (ereignis) {
