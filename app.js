@@ -320,7 +320,7 @@ let gerichte = [];           // nur die sichtbaren Gerichte
 let plaene = new Map();      // Wochenpläne: Schlüssel = Datum des Montags, z. B. "2026-10-19"
 let haken = new Map();       // abgehakte Einkaufsposten: Schlüssel = "Woche|Posten"
 let extras = new Map();      // eigene Artikel auf der Einkaufsliste: Schlüssel = id (inkl. gelöschter, für Vorschläge)
-let extraEntwurf = { name: "", menge: "" }; // halb getippter Artikel bleibt beim Neuzeichnen erhalten
+let extraEntwurf = { name: "", menge: "", einheit: "Stück" }; // halb getippter Artikel bleibt beim Neuzeichnen erhalten
 
 function gerichteAbleiten() {
   gerichte = Array.from(gerichteRoh.values()).filter(function (g) { return !g.geloescht; });
@@ -1917,13 +1917,6 @@ function einkaufZeichnen() {
 
   const hatteFokus = extraOffen && document.activeElement && document.activeElement.id === "extra-name";
   const kopfIcons = [];
-  if (erledigt.length > 0) {
-    const haken = el("span", { "aria-hidden": "true" });
-    haken.innerHTML = HAKEN_ICON;
-    kopfIcons.push({ beschriftung: "Haken entfernen", knoten: haken, aktion: function () {
-      if (confirm("Alle Haken in dieser Einkaufsliste entfernen?")) hakenZuruecksetzen(montag);
-    } });
-  }
   if (offen.length > 0) {
     kopfIcons.push({
       beschriftung: "Liste teilen", knoten: teilenIconKnoten(),
@@ -1991,6 +1984,7 @@ function extraMengenSummieren(alt, neu) {
   return alt + " + " + neu;
 }
 
+const EXTRA_EINHEITEN = ["Stück", "g", "kg", "ml", "l", "Packung", "Dose", "Glas", "Flasche", "Beutel", "Bund"];
 let extraOffen = false; // Eingabe unter "Artikel hinzufügen" aufgeklappt?
 
 // Eingabezeile für eigene Artikel (Name, optionale Menge) mit Vorschlägen aus früheren Einträgen.
@@ -2000,17 +1994,26 @@ function extraEingabe(woche) {
     autocapitalize: "sentences", placeholder: "Artikel hinzufügen", "aria-label": "Artikel", value: extraEntwurf.name
   });
   const menge = el("input", {
-    type: "text", id: "extra-menge", class: "eingabe extra-menge", autocomplete: "off",
+    type: "text", id: "extra-menge", class: "eingabe extra-menge", autocomplete: "off", inputmode: "decimal",
     placeholder: "Menge", "aria-label": "Menge (optional)", value: extraEntwurf.menge
   });
+  const einheit = el("select", { id: "extra-einheit", class: "eingabe extra-einheit", "aria-label": "Einheit" },
+    EXTRA_EINHEITEN.map(function (e) { return el("option", { value: e, text: e }); }));
+  einheit.value = EXTRA_EINHEITEN.indexOf(extraEntwurf.einheit) >= 0 ? extraEntwurf.einheit : "Stück";
   name.addEventListener("input", function () { extraEntwurf.name = name.value; });
   menge.addEventListener("input", function () { extraEntwurf.menge = menge.value; });
+  einheit.addEventListener("change", function () { extraEntwurf.einheit = einheit.value; });
   const formular = el("form", {
     class: "extra-form",
     hidden: !extraOffen,
-    onsubmit: function (e) { e.preventDefault(); extraHinzufuegen(woche, name.value, menge.value); }
+    onsubmit: function (e) {
+      e.preventDefault();
+      // Ohne Zahl keine Einheit; sonst "2 Dose" (so wird es auch gespeichert und summiert).
+      const zahl = menge.value.trim();
+      extraHinzufuegen(woche, name.value, zahl ? zahl + " " + einheit.value : "");
+    }
   },
-    name, menge,
+    name, menge, einheit,
     el("button", { class: "knopf knopf-primaer extra-plus", type: "submit", "aria-label": "Zur Liste hinzufügen", text: "+" })
   );
   const kopf = el("button", { class: "import-kopf", type: "button", "aria-expanded": extraOffen ? "true" : "false" },
@@ -2085,7 +2088,7 @@ async function extraHinzufuegen(woche, nameText, mengeText2) {
   const name = nameText.trim();
   if (name === "") return;
   const menge = mengeText2.trim();
-  extraEntwurf = { name: "", menge: "" };
+  extraEntwurf = { name: "", menge: "", einheit: extraEntwurf.einheit };
   pushMeldungVormerken(name);
   // Gibt es den Artikel in dieser Woche schon, wird nichts doppelt angelegt.
   const vorhanden = Array.from(extras.values()).find(function (e) {
@@ -2154,24 +2157,6 @@ async function postenUmschalten(montag, schluessel) {
   }]);
 }
 
-async function hakenZuruecksetzen(montag) {
-  const woche = datumSchluessel(montag);
-  const neue = [];
-  haken.forEach(function (h) {
-    if (h.woche === woche && h.erledigt) {
-      neue.push({ id: h.id, woche: h.woche, posten: h.posten, erledigt: false, aktualisiert: zeitNach(h), dirty: 1 });
-    }
-  });
-  const neueExtras = [];
-  extras.forEach(function (e) {
-    if (e.woche === woche && e.erledigt && !e.geloescht) {
-      neueExtras.push(Object.assign({}, e, { erledigt: false, aktualisiert: zeitNach(e), dirty: 1 }));
-    }
-  });
-  if (neue.length > 0) await hakenSpeichern(neue);
-  if (neueExtras.length > 0) await extraSpeichern(neueExtras);
-}
-
 // Öffnet das iPhone-Teilen-Menü (Nachrichten, WhatsApp, Notizen …) mit den offenen Posten.
 async function einkaufTeilen(montag, offene, eigeneOffen) {
   const freitag = tagVerschieben(montag, 4);
@@ -2198,7 +2183,6 @@ async function einkaufTeilen(montag, offene, eigeneOffen) {
 
 /* ---------- Wochenplan als Bild teilen ---------- */
 
-const HAKEN_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const TEILEN_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M8 7l4-4 4 4"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg>';
 
 function teilenIconKnoten() {

@@ -498,7 +498,8 @@ nav button.aktiv { color: var(--akzent); background: var(--karte-hell); font-wei
 .detail-titel + .status { margin: 0 0 4px; }
 
 /* ===== Eigene Artikel auf der Einkaufsliste ===== */
-.extra-form { display: grid; grid-template-columns: 1fr 96px 48px; gap: 8px; margin: 0 0 14px; }
+.extra-form { display: grid; grid-template-columns: 1fr 1fr 48px; gap: 8px; margin: 0 0 14px; }
+.extra-form #extra-name { grid-column: 1 / -1; }
 .extra-form .eingabe { min-width: 0; }
 .extra-plus { width: 48px; padding: 0; font-size: 1.5rem; line-height: 1; }
 .wisch.pille { margin-bottom: 8px; }
