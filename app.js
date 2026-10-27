@@ -1920,7 +1920,9 @@ function einkaufZeichnen() {
   if (erledigt.length > 0) {
     const haken = el("span", { "aria-hidden": "true" });
     haken.innerHTML = HAKEN_ICON;
-    kopfIcons.push({ beschriftung: "Haken entfernen", knoten: haken, aktion: function () { hakenZuruecksetzen(montag); } });
+    kopfIcons.push({ beschriftung: "Haken entfernen", knoten: haken, aktion: function () {
+      if (confirm("Alle Haken in dieser Einkaufsliste entfernen?")) hakenZuruecksetzen(montag);
+    } });
   }
   if (offen.length > 0) {
     kopfIcons.push({
