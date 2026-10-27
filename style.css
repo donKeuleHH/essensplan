@@ -928,3 +928,12 @@ body, button, input, select, textarea {
 .vorrat-icon svg { width: 20px; height: 20px; }
 .vorrat-aus { margin: 16px 2px 0; color: var(--text-leise); font-size: 0.9rem; }
 .vorrat-aus summary { cursor: pointer; padding: 6px 0; }
+
+/* Abteilungen */
+.abschnitt.abteilung { display: flex; align-items: center; gap: 8px; margin: 20px 2px 0; }
+.abt-zahl { font-weight: 600; font-size: 0.72rem; letter-spacing: 0; background: var(--karte); border: 1px solid var(--linie); border-radius: 10px; padding: 1px 8px; }
+.abt-wahl { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 14px; margin-bottom: 8px; text-align: left; font: inherit; color: var(--text); background: var(--karte); border: 1px solid var(--linie); border-radius: 14px; cursor: pointer; }
+.abt-wahl.aktiv { border-color: var(--akzent); color: var(--akzent); }
+.abt-emoji { font-size: 1.3rem; }
+.abt-haken { flex: none; font-weight: 700; }
+.abt-entfernen { width: 100%; margin-top: 14px; }

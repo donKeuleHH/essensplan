@@ -15,7 +15,7 @@ let db = null;
 
 function datenbankOeffnen() {
   return new Promise(function (resolve, reject) {
-    const anfrage = indexedDB.open("essensplan", 6);
+    const anfrage = indexedDB.open("essensplan", 7);
     anfrage.onupgradeneeded = function () {
       const d = anfrage.result;
       if (!d.objectStoreNames.contains("gerichte")) {
@@ -41,6 +41,10 @@ function datenbankOeffnen() {
       // Ab Version 6: Vorrat (Zutaten, die immer da sind und nicht auf die Einkaufsliste sollen)
       if (!d.objectStoreNames.contains("vorrat")) {
         d.createObjectStore("vorrat", { keyPath: "id" });
+      }
+      // Ab Version 7: von Hand geänderte Abteilungen einzelner Zutaten
+      if (!d.objectStoreNames.contains("abteilungen")) {
+        d.createObjectStore("abteilungen", { keyPath: "id" });
       }
     };
     anfrage.onsuccess = function () { resolve(anfrage.result); };
@@ -323,6 +327,7 @@ let gerichteRoh = new Map(); // alle Gerichte inkl. gelöschter (der Löschmarke
 let gerichte = [];           // nur die sichtbaren Gerichte
 let plaene = new Map();      // Wochenpläne: Schlüssel = Datum des Montags, z. B. "2026-10-19"
 let haken = new Map();       // abgehakte Einkaufsposten: Schlüssel = "Woche|Posten"
+let abteilungsWahl = new Map(); // von Hand gewählte Abteilungen: Schlüssel = id (aus dem Namen abgeleitet)
 let vorrat = new Map();      // Vorrat: Schlüssel = id (inkl. gelöschter)
 let extras = new Map();      // eigene Artikel auf der Einkaufsliste: Schlüssel = id (inkl. gelöschter, für Vorschläge)
 let extraEntwurf = { name: "", menge: "", einheit: "Stück" }; // halb getippter Artikel bleibt beim Neuzeichnen erhalten
@@ -1898,6 +1903,139 @@ function langDruck(knopf, aktion) {
   }, true);
 }
 
+/* ---------- Abteilungen im Supermarkt ---------- */
+
+const ABTEILUNGEN = [
+  { id: "obst", name: "Obst & Gemüse", emoji: "🥦" },
+  { id: "fleisch", name: "Fleisch & Fisch", emoji: "🥩" },
+  { id: "kuehl", name: "Kühlregal", emoji: "🥛" },
+  { id: "back", name: "Backwaren", emoji: "🍞" },
+  { id: "trocken", name: "Trockenware & Konserven", emoji: "🥫" },
+  { id: "gewuerz", name: "Gewürze & Öle", emoji: "🧂" },
+  { id: "getraenke", name: "Getränke", emoji: "🥤" },
+  { id: "sonstiges", name: "Sonstiges", emoji: "🛒" }
+];
+
+// Abteilung je Symbol aus ARTIKEL_SYMBOLE (alles, was dort nicht steht, landet in "Sonstiges").
+const SYMBOL_ABTEILUNG = {
+  obst: "🍎🍐🍌🍊🍋🍓🍇🍉🍒🍑🍍🥭🥝🍅🥒🫑🥕🌽🥔🧅🧄🍄🥬🥦🍆🥑🎃",
+  fleisch: "🥩🍗🥓🐟🦐🌭",
+  kuehl: "🥛🧈🧀🥚🍕🍟🍦🍔",
+  back: "🍞🥖🥐🥨🍰",
+  trocken: "🥜🥥🫒🍝🍚🌾🍫🍬🍯🥣🍪🍲",
+  gewuerz: "🌶️🧂",
+  getraenke: "💧🧃☕🍵🍺🍷🥂🥤"
+};
+
+// Zusätzliche Stichwörter, die ein Symbol-Stichwort übertrumpfen (z. B. "Olivenöl" gehört zu den Ölen, nicht zu den Oliven).
+const ABTEILUNG_STICHWORTE = {
+  obst: "kräuter petersilie schnittlauch koriander dill minze ingwer radieschen rucola zucchini sellerie fenchel salat rhabarber beere beeren",
+  fleisch: "rind rinder schwein lamm gehacktes filet schnitzel salami aufschnitt bacon",
+  kuehl: "mozzarella feta parmesan frischkäse schmand skyr kefir buttermilch tofu hummus gouda emmentaler mascarpone ricotta crème fraîche",
+  back: "brötchen toastbrot knäckebrot kuchen",
+  trocken: "linse linsen kichererbse kichererbsen bohne bohnen tomatenmark passata zucker backpulver hefe stärke couscous bulgur quinoa dose dosen konserve ketchup senf mayonnaise brühe tomaten-passata kokosmilch rosinen",
+  gewuerz: "gewürz zimt curry kurkuma kümmel muskat paprikapulver oregano thymian rosmarin öl olivenöl rapsöl sonnenblumenöl essig sojasauce vanille lorbeer",
+  getraenke: "getränk mineralwasser apfelsaft orangensaft schorle"
+};
+
+const ABTEILUNG_INDEX = (function () {
+  const liste = [];
+  Object.keys(SYMBOL_ABTEILUNG).forEach(function (abt) {
+    Array.from(SYMBOL_ABTEILUNG[abt]).forEach(function (emoji) { SYMBOL_ABTEILUNG[emoji] = abt; });
+  });
+  ARTIKEL_SYMBOLE.forEach(function (eintrag) {
+    const abt = SYMBOL_ABTEILUNG[eintrag[0]] || SYMBOL_ABTEILUNG[eintrag[0].replace("️", "")] || "sonstiges";
+    eintrag[1].split(" ").forEach(function (wort) { liste.push([wort, abt, 0]); });
+  });
+  Object.keys(ABTEILUNG_STICHWORTE).forEach(function (abt) {
+    ABTEILUNG_STICHWORTE[abt].split(" ").forEach(function (wort) { liste.push([wort, abt, 1]); });
+  });
+  return liste;
+})();
+
+function abteilungAutomatisch(name) {
+  const woerter = String(name || "").toLowerCase().split(/[^a-zäöüßé]+/).filter(Boolean);
+  let beste = "sonstiges", bestePunkte = 0;
+  woerter.forEach(function (w) {
+    ABTEILUNG_INDEX.forEach(function (k) {
+      const schluessel = k[0];
+      let punkte = 0;
+      if (w === schluessel) punkte = 100 + schluessel.length;
+      else if (schluessel.length >= 4 && w.endsWith(schluessel)) punkte = 50 + schluessel.length;
+      else if (schluessel.length >= 4 && w.startsWith(schluessel)) punkte = 20 + schluessel.length;
+      if (punkte > 0) punkte += k[2];
+      if (punkte > bestePunkte) { bestePunkte = punkte; beste = k[1]; }
+    });
+  });
+  return beste;
+}
+
+// Gleicher Name -> gleiche ID auf jedem Gerät, damit sich zwei Handys nicht in die Quere kommen.
+function abteilungsId(name) {
+  const text = String(name).trim().toLowerCase();
+  function hash(seed) {
+    let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return ((h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0"));
+  }
+  const hex = hash(1) + hash(2);
+  return hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-" + hex.slice(12, 16) + "-" + hex.slice(16, 20) + "-" + hex.slice(20, 32);
+}
+
+function abteilungFuer(name) {
+  const w = abteilungsWahl.get(abteilungsId(name));
+  if (w && !w.geloescht && ABTEILUNGEN.some(function (a) { return a.id === w.abteilung; })) return w.abteilung;
+  return abteilungAutomatisch(name);
+}
+
+async function abteilungSetzen(name, abteilung) {
+  const id = abteilungsId(name);
+  const alt = abteilungsWahl.get(id);
+  const automatisch = abteilung === abteilungAutomatisch(name);
+  if (!alt && automatisch) return;
+  const eintrag = Object.assign({}, alt || {}, {
+    id: id, name: name.trim(), abteilung: abteilung, geloescht: automatisch,
+    aktualisiert: zeitNach(alt), dirty: 1
+  });
+  abteilungsWahl.set(id, eintrag);
+  einkaufZeichnen();
+  try {
+    await transaktion(["abteilungen"], function (st) { st.abteilungen.put(eintrag); });
+    await abteilungenNeuLaden();
+    syncAnstossen();
+  } catch (fehler) {
+    alert("Das Speichern hat leider nicht geklappt.");
+  }
+}
+
+// Blatt zum langen Drücken auf einen Artikel: Abteilung wählen (und bei eigenen Artikeln entfernen).
+function abteilungOeffnen(name, entfernen) {
+  const aktuell = abteilungFuer(name);
+  const knoepfe = ABTEILUNGEN.map(function (a) {
+    return el("button", {
+      class: "abt-wahl" + (a.id === aktuell ? " aktiv" : ""), type: "button", "data-abt": a.id,
+      onclick: function () { blattSchliessen(); abteilungSetzen(name, a.id); }
+    },
+      el("span", { class: "abt-emoji", text: a.emoji }),
+      el("span", { class: "posten-name", text: a.name }),
+      el("span", { class: "abt-haken", text: a.id === aktuell ? "✓" : "" })
+    );
+  });
+  const inhalt = [el("p", { class: "leise", text: "In welche Abteilung gehört „" + name + "“? Das merkt sich die App für alle Wochen." })].concat(knoepfe);
+  if (entfernen) {
+    inhalt.push(el("button", {
+      class: "knopf knopf-gefahr abt-entfernen", type: "button", text: "Von der Liste entfernen",
+      onclick: function () { blattSchliessen(); entfernen(); }
+    }));
+  }
+  blattZeigen({ titel: name, links: { text: "Schließen", aktion: blattSchliessen }, inhalt: inhalt });
+}
+
 /* ---------- Einkaufsliste ---------- */
 
 // kg und l werden intern in g und ml gerechnet, damit z. B. 600 g + 700 g = 1,3 kg ergibt.
@@ -2101,9 +2239,9 @@ function einkaufZeichnen() {
 
   // Zutaten aus dem Wochenplan und eigene Artikel stehen in einer gemeinsamen Liste.
   const alle = ergebnis.posten.map(function (p) {
-    return { name: p.name, quelle: "rezept", p: p, erledigt: abgehakt.has(p.schluessel) };
+    return { name: p.name, quelle: "rezept", p: p, erledigt: abgehakt.has(p.schluessel), abt: abteilungFuer(p.name) };
   }).concat(eigene.map(function (e) {
-    return { name: e.name, quelle: "eigen", e: e, erledigt: !!e.erledigt };
+    return { name: e.name, quelle: "eigen", e: e, erledigt: !!e.erledigt, abt: abteilungFuer(e.name) };
   })).sort(function (x, y) {
     return x.name.localeCompare(y.name, "de") || (x.quelle < y.quelle ? -1 : x.quelle > y.quelle ? 1 : 0);
   });
@@ -2141,7 +2279,13 @@ function einkaufZeichnen() {
     ));
   } else {
     if (offen.length > 0) {
-      teile.push(el("div", { class: "posten-liste" }, offen.map(zeile)));
+      ABTEILUNGEN.forEach(function (a) {
+        const gruppe = offen.filter(function (x) { return x.abt === a.id; });
+        if (gruppe.length === 0) return;
+        teile.push(el("h3", { class: "abschnitt abteilung", "data-abt": a.id },
+          el("span", { text: a.emoji + " " + a.name }), el("span", { class: "abt-zahl", text: String(gruppe.length) })));
+        teile.push(el("div", { class: "posten-liste" }, gruppe.map(zeile)));
+      });
     } else {
       teile.push(el("p", { class: "leise", text: "Alles erledigt." }));
     }
@@ -2150,8 +2294,8 @@ function einkaufZeichnen() {
       teile.push(el("div", { class: "posten-liste" }, erledigt.map(zeile)));
     }
   }
-  if (eigene.length > 0) {
-    teile.push(el("p", { class: "leise hinweis-klein", text: "Eigene Artikel: gedrückt halten zum Entfernen." }));
+  if (alle.length > 0) {
+    teile.push(el("p", { class: "leise hinweis-klein", text: "Gedrückt halten: Abteilung ändern" + (eigene.length > 0 ? " oder eigenen Artikel entfernen." : ".") }));
   }
   if (ausgeblendet.length > 0) {
     teile.push(el("details", { class: "vorrat-aus" },
@@ -2246,9 +2390,9 @@ function extraZeile(e) {
     neu ? el("span", { class: "posten-neu", text: "NEU" }) : null,
     neu && e.von ? el("span", { class: "posten-von", text: "von " + e.von }) : null
   );
-  // Eigene Artikel entfernt man durch langes Drücken.
+  // Langes Drücken: Abteilung ändern oder den eigenen Artikel entfernen.
   langDruck(kachel, function () {
-    if (confirm("„" + e.name + "“ von der Liste entfernen?")) extraLoeschen(e.id);
+    abteilungOeffnen(e.name, function () { extraLoeschen(e.id); });
   });
   return kachel;
 }
@@ -2328,7 +2472,7 @@ async function extraLoeschen(id) {
 }
 
 function postenZeile(p, erledigt, montag) {
-  return el("button", {
+  const kachel = el("button", {
     class: "posten" + (erledigt ? " erledigt" : ""), type: "button", role: "checkbox",
     "aria-checked": erledigt ? "true" : "false",
     onclick: function () { postenUmschalten(montag, p.schluessel); }
@@ -2338,6 +2482,8 @@ function postenZeile(p, erledigt, montag) {
     el("span", { class: "posten-name", text: p.name }),
     el("span", { class: "posten-menge", text: mengeText(p) })
   );
+  langDruck(kachel, function () { abteilungOeffnen(p.name, null); });
+  return kachel;
 }
 
 // Jeder Haken ist ein eigener Eintrag mit eigenem Zeitstempel. So können du und deine Frau
@@ -2715,6 +2861,11 @@ const extrasNeuLaden = ladefunktion("extras", function (liste) {
   einkaufZeichnen();
 });
 
+const abteilungenNeuLaden = ladefunktion("abteilungen", function (liste) {
+  abteilungsWahl = new Map(liste.map(function (a) { return [a.id, a]; }));
+  einkaufZeichnen();
+});
+
 const vorratNeuLaden = ladefunktion("vorrat", function (liste) {
   vorrat = new Map(liste.map(function (v) { return [v.id, v]; }));
   vorratListeZeichnen();
@@ -2727,6 +2878,7 @@ async function alleNeuLaden() {
   await hakenNeuLaden();
   await extrasNeuLaden();
   await vorratNeuLaden();
+  await abteilungenNeuLaden();
 }
 
 /* ---------- Synchronisierung mit Supabase ---------- */
@@ -2833,6 +2985,19 @@ const SYNC_TABELLEN = [
     vonServer: function (z) {
       const d = z.daten || {};
       return { id: z.id, name: d.name || "", geloescht: !!z.geloescht, aktualisiert: z.aktualisiert };
+    }
+  },
+  {
+    name: "zutat_abteilung", speicher: "abteilungen", konflikt: "id", block: 50,
+    liste: function () { return Array.from(abteilungsWahl.values()); },
+    holen: function (schluessel) { return abteilungsWahl.get(schluessel); },
+    neuLaden: function () { return abteilungenNeuLaden(); },
+    schluesselLokal: function (r) { return r.id; },
+    schluesselServer: function (z) { return z.id; },
+    zuServer: function (a) { return { id: a.id, daten: { name: a.name, abteilung: a.abteilung }, geloescht: !!a.geloescht, aktualisiert: a.aktualisiert }; },
+    vonServer: function (z) {
+      const d = z.daten || {};
+      return { id: z.id, name: d.name || "", abteilung: d.abteilung || "", geloescht: !!z.geloescht, aktualisiert: z.aktualisiert };
     }
   }
 ];
