@@ -1976,7 +1976,7 @@ document.addEventListener("visibilitychange", function () {
 
 /* ---------- Vorrat: Zutaten, die immer da sind ---------- */
 
-const VORRAT_ICON = '<svg viewBox="0 0 32 32" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4v24M27 4v24"/><path d="M5 16.5h22M5 28h22"/><rect x="8.5" y="8" width="6" height="8.5" rx=".5"/><path d="M8.5 11h6"/><rect x="17" y="11.5" width="5" height="5" rx=".5"/><rect x="8.5" y="21" width="5" height="7" rx=".5"/><rect x="16" y="19.5" width="7" height="8.5" rx=".5"/><path d="M16 22.5h7"/></svg>';
+const VORRAT_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8"/><path d="M7.5 6.5h9"/><path d="M7 6.5c-1 .8-1.5 1.8-1.5 3v9a2.5 2.5 0 0 0 2.5 2.5h8a2.5 2.5 0 0 0 2.5-2.5v-9c0-1.2-.5-2.2-1.5-3"/><rect x="8.5" y="11" width="7" height="5" rx="1"/></svg>';
 
 function vorratIconKnoten() {
   const e = el("span", { class: "vorrat-icon" });
