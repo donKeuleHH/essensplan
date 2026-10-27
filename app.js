@@ -684,7 +684,7 @@ function detailOeffnen(id, wahl) {
   }
 
   if (g.notizen) {
-    inhalt.push(el("h3", { class: "abschnitt", text: "Notizen" }));
+    inhalt.push(el("h3", { class: "abschnitt", text: "Zubereitung" }));
     inhalt.push(el("p", { class: "notizen", text: g.notizen }));
   }
 
@@ -911,7 +911,7 @@ function formularOeffnen(gericht) {
   const fett = zahlFeld("Fett (g)", n.fett);
 
   const notizenFeld = el("textarea", {
-    class: "eingabe", placeholder: "Zubereitung, Tipps, Varianten …"
+    class: "eingabe", rows: "8", placeholder: "Schritte, Tipps, Varianten …"
   });
   notizenFeld.value = g.notizen || "";
 
@@ -997,7 +997,7 @@ function formularOeffnen(gericht) {
       zutatHinzufuegen,
       el("h3", { class: "abschnitt", text: "Nährwerte pro Portion" }),
       el("div", { class: "zweispaltig" }, kcal.feld, eiweiss.feld, kh.feld, fett.feld),
-      el("label", { class: "feld" }, el("span", { text: "Notizen (optional)" }), notizenFeld),
+      el("label", { class: "feld" }, el("span", { text: "Zubereitung (optional)" }), notizenFeld),
       fehler,
       el("button", { class: "knopf knopf-primaer", type: "button", style: "width: 100%", onclick: speichern, text: "Speichern" })
     ]
@@ -1156,7 +1156,7 @@ function importKarte(beiErfolg) {
     }
   });
   const inhalt = el("div", { class: "import-inhalt", hidden: true },
-    el("p", { class: "leise", text: "Link einer Rezeptseite einfügen. Titel, Zutaten, Anleitung (unter Notizen), Nährwerte und Foto werden übernommen." }),
+    el("p", { class: "leise", text: "Link einer Rezeptseite einfügen. Titel, Zutaten, Anleitung (unter Zubereitung), Nährwerte und Foto werden übernommen." }),
     feld,
     el("label", { class: "feld", style: "margin-top: 10px" }, el("span", { text: "Kochen für (Mengen werden umgerechnet)" }), personen),
     knopf, meldung
