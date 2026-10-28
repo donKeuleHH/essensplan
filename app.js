@@ -4058,6 +4058,23 @@ setTimeout(splashAusblenden, 6000); // Sicherheitsnetz, falls beim Start etwas h
 
 start().then(splashAusblenden, splashAusblenden);
 
+/* ---------- iPhone: Scrollen darf am Rand nicht festhängen ---------- */
+// iOS verliert den Scroll-Fokus, wenn man exakt am oberen/unteren Rand startet. Ein Pixel Abstand verhindert das.
+document.addEventListener("touchstart", function (e) {
+  let n = e.target instanceof Element ? e.target : null;
+  while (n && n !== document.body) {
+    if (n.scrollHeight > n.clientHeight + 2) {
+      const o = getComputedStyle(n).overflowY;
+      if (o === "auto" || o === "scroll") {
+        if (n.scrollTop <= 0) n.scrollTop = 1;
+        else if (n.scrollTop + n.clientHeight >= n.scrollHeight) n.scrollTop = n.scrollHeight - n.clientHeight - 1;
+        return;
+      }
+    }
+    n = n.parentElement;
+  }
+}, { passive: true });
+
 /* ---------- Versionsprüfung: veraltete App erkennen ---------- */
 
 let appVeraltet = false;      // true, sobald auf dem Server eine neuere Version liegt
