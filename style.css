@@ -963,3 +963,10 @@ body, button, input, select, textarea {
 .pruef-pille.aktiv { color: var(--akzent); border-color: var(--akzent); }
 .pruef-weiter { width: 100%; margin-top: 14px; }
 .pruef-skip { display: block; margin: 12px auto 0; }
+
+/* Symbol wählen */
+.sym-box { margin-bottom: 14px; }
+.sym-kopf { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; font: inherit; color: var(--text); text-align: left; background: var(--karte); border: 1px solid var(--linie); border-radius: 14px; cursor: pointer; }
+.sym-kopf .symbol { font-size: 1.6rem; }
+.sym-editor { margin: 8px 0 0; }
+.sym-reset { width: 100%; margin-top: 10px; }

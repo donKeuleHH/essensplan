@@ -1857,7 +1857,7 @@ function unsichereZutaten(zutaten) {
     if (!k || gesehen.has(k)) return;
     gesehen.add(k);
     const wahl = abteilungsWahl.get(abteilungsId(z.name));
-    if (wahl && !wahl.geloescht) return;
+    if (wahl && wahl.abteilung && !wahl.geloescht) return;
     if (abteilungAutomatisch(z.name) === "sonstiges" && !vorratNamenSet().has(k)) liste.push(z);
   });
   return liste;
@@ -1915,7 +1915,7 @@ const ARTIKEL_SYMBOLE = [
   ["🥬", "salat spinat kohl lauch mangold"], ["🥦", "brokkoli blumenkohl"], ["🍆", "aubergine"], ["🥑", "avocado"],
   ["🎃", "kürbis"], ["🥜", "nuss nüsse erdnuss mandel"], ["🥥", "kokos kokosnuss kokosmilch"], ["🫒", "olive olivenöl"], ["🌶️", "chili pfeffer"],
   ["🍞", "brot toast"], ["🥖", "brötchen baguette semmel"], ["🥐", "croissant"], ["🥨", "brezel"],
-  ["🍝", "nudel spaghetti pasta penne fusilli"], ["🍚", "reis"], ["🌾", "mehl haferflocken"], ["🍕", "pizza"],
+  ["🍝", "nudel spaghetti pasta penne fusilli tortellini tortelloni ravioli gnocchi maultaschen lasagne cannelloni tagliatelle farfalle rigatoni makkaroni spätzle"], ["🍚", "reis"], ["🌾", "mehl haferflocken"], ["🍕", "pizza"],
   ["🍔", "burger"], ["🍟", "pommes"], ["🌭", "wurst würstchen bratwurst"], ["🍰", "kuchen torte"], ["🍪", "keks kekse"],
   ["🍫", "schokolade"], ["🍬", "bonbon gummibärchen süßigkeit"], ["🍯", "honig marmelade"], ["🥣", "müsli cornflakes"],
   ["🍲", "suppe eintopf"], ["🥛", "milch joghurt sahne quark"], ["🧈", "butter margarine"], ["🧀", "käse"],
@@ -1944,7 +1944,7 @@ function artikelSymbol(name) {
       let punkte = 0;
       if (w === schluessel) punkte = 100 + schluessel.length;
       else if (schluessel.length >= 4 && w.endsWith(schluessel)) punkte = 50 + schluessel.length;
-      else if (schluessel.length >= 4 && w.startsWith(schluessel)) punkte = 20 + schluessel.length;
+      else if (schluessel.length >= 4 && w.startsWith(schluessel)) punkte = 10 + schluessel.length;
       if (punkte > bestePunkte) { bestePunkte = punkte; bestes = k[1]; }
     });
   });
@@ -1952,7 +1952,8 @@ function artikelSymbol(name) {
 }
 
 function symbolKnoten(name) {
-  const emoji = artikelSymbol(name);
+  const eigen = abteilungsWahl.get(abteilungsId(name));
+  const emoji = (eigen && eigen.emoji) || artikelSymbol(name);
   if (emoji) return el("span", { class: "symbol", "aria-hidden": "true", text: emoji });
   const buchstabe = String(name || "").trim().charAt(0).toUpperCase() || "?";
   return el("span", { class: "symbol buchstabe", "aria-hidden": "true", text: buchstabe });
@@ -2083,7 +2084,7 @@ function abteilungsId(name) {
 
 function abteilungFuer(name) {
   const w = abteilungsWahl.get(abteilungsId(name));
-  if (w && !w.geloescht && abteilungsListe().some(function (a) { return a.id === w.abteilung; })) return w.abteilung;
+  if (w && w.abteilung && !w.geloescht && abteilungsListe().some(function (a) { return a.id === w.abteilung; })) return w.abteilung;
   return abteilungAutomatisch(name);
 }
 
@@ -2092,10 +2093,18 @@ async function abteilungSetzen(name, abteilung) {
   const alt = abteilungsWahl.get(id);
   const automatisch = abteilung === abteilungAutomatisch(name);
   if (!alt && automatisch) return;
-  const eintrag = Object.assign({}, alt || {}, {
-    id: id, name: name.trim(), abteilung: abteilung, geloescht: automatisch,
-    aktualisiert: zeitNach(alt), dirty: 1
+  await zutatEinstellungSpeichern(name, { abteilung: automatisch ? "" : abteilung });
+}
+
+// Ein Datensatz pro Zutatenname: eigene Abteilung ("" = automatisch) und eigenes Symbol ("" = automatisch).
+async function zutatEinstellungSpeichern(name, aenderung) {
+  const id = abteilungsId(name);
+  const alt = abteilungsWahl.get(id);
+  const eintrag = Object.assign({ abteilung: "", emoji: "" }, alt || {}, aenderung, {
+    id: id, name: name.trim(), aktualisiert: zeitNach(alt), dirty: 1
   });
+  eintrag.geloescht = !eintrag.abteilung && !eintrag.emoji;
+  if (!alt && eintrag.geloescht) return;
   abteilungsWahl.set(id, eintrag);
   einkaufZeichnen();
   try {
@@ -2106,6 +2115,21 @@ async function abteilungSetzen(name, abteilung) {
     alert("Das Speichern hat leider nicht geklappt.");
   }
 }
+
+function symbolSetzen(name, emoji) {
+  return zutatEinstellungSpeichern(name, { emoji: emoji || "" });
+}
+
+function letztesZeichen(text) {
+  const t = String(text || "").trim();
+  if (!t) return "";
+  const teile = window.Intl && Intl.Segmenter
+    ? Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(t)).map(function (x) { return x.segment; })
+    : Array.from(t);
+  return teile[teile.length - 1];
+}
+
+const ZUTAT_EMOJIS = ["🍝","🥟","🍕","🍲","🥘","🍜","🍛","🥗","🥙","🌮","🍳","🥞","🧇","🍞","🥐","🍰","🧁","🍪","🥜","🍯","🧀","🥛","🧈","🥚","🥩","🍗","🥓","🐟","🦐","🥦","🥕","🍅","🥔","🧅","🧄","🍄","🌶️","🧂","🫒","🍎","🍌","🍋","🍇","🍫","🍬","🥤","☕","🍷","🧻","🧴"];
 
 const ABT_EMOJIS = ["🥦","🍎","🥩","🐟","🥛","🧀","🍞","🥫","🧂","🥤","🍷","🧊","🍦","🍫","🧻","🧴","🧼","🐾","🌿","🍽️","🛒","🏠","💊","🎁"];
 
@@ -2162,14 +2186,7 @@ function abteilungenVerwalten(zurueck) {
   let neuEmoji = "🛒";
   const neuEmojiFeld = el("input", { type: "text", class: "eingabe abt-emoji-feld", value: neuEmoji, "aria-label": "Emoji", autocomplete: "off" });
   neuEmojiFeld.addEventListener("input", function () { neuEmoji = emojiNehmen(neuEmojiFeld.value) || "🛒"; });
-  function emojiNehmen(text) {
-    const t = text.trim();
-    if (!t) return "";
-    const teile = window.Intl && Intl.Segmenter
-      ? Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(t)).map(function (x) { return x.segment; })
-      : Array.from(t);
-    return teile[teile.length - 1];
-  }
+  function emojiNehmen(text) { return letztesZeichen(text); }
   function chips(waehlen) {
     return el("div", { class: "abt-chips" }, ABT_EMOJIS.map(function (e) {
       return el("button", { class: "abt-chip", type: "button", text: e, "aria-label": "Emoji " + e, onclick: function () { waehlen(e); } });
@@ -2249,7 +2266,35 @@ function abteilungOeffnen(name, entfernen) {
       el("span", { class: "abt-haken", text: a.id === aktuell ? "✓" : "" })
     );
   });
-  const inhalt = [el("p", { class: "leise", text: "In welche Abteilung gehört „" + name + "“? Das merkt sich die App für alle Wochen." })].concat(knoepfe);
+  // Symbol der Zutat (eigenes Emoji oder automatisch erkannt)
+  const symbolBox = el("div", { class: "sym-box" });
+  let symbolOffen = false;
+  function symbolZeichnen() {
+    const eigen = abteilungsWahl.get(abteilungsId(name));
+    const hat = !!(eigen && eigen.emoji);
+    const kopf = el("button", {
+      class: "sym-kopf", type: "button", "aria-expanded": symbolOffen ? "true" : "false",
+      onclick: function () { symbolOffen = !symbolOffen; symbolZeichnen(); }
+    }, symbolKnoten(name), el("span", { class: "posten-name", text: hat ? "Eigenes Symbol" : "Symbol (automatisch)" }), el("span", { class: "abt-haken", text: symbolOffen ? "▾" : "Ändern" }));
+    const teile = [kopf];
+    if (symbolOffen) {
+      const feld = el("input", { type: "text", class: "eingabe abt-emoji-feld", value: (hat ? eigen.emoji : ""), "aria-label": "Eigenes Emoji", placeholder: "🙂", autocomplete: "off" });
+      feld.addEventListener("change", function () {
+        const e = letztesZeichen(feld.value);
+        if (e) symbolSetzen(name, e).then(symbolZeichnen);
+      });
+      teile.push(el("div", { class: "abt-editor sym-editor" },
+        el("p", { class: "leise hinweis-klein", text: "Tippe ein Emoji ein oder wähle eins aus:" }), feld,
+        el("div", { class: "abt-chips" }, ZUTAT_EMOJIS.map(function (e) {
+          return el("button", { class: "abt-chip", type: "button", text: e, "aria-label": "Symbol " + e,
+            onclick: function () { symbolSetzen(name, e).then(symbolZeichnen); } });
+        })),
+        hat ? el("button", { class: "knopf sym-reset", type: "button", text: "Zurücksetzen (automatisch)", onclick: function () { symbolSetzen(name, "").then(symbolZeichnen); } }) : null));
+    }
+    symbolBox.replaceChildren.apply(symbolBox, teile);
+  }
+  symbolZeichnen();
+  const inhalt = [symbolBox, el("p", { class: "leise", text: "In welche Abteilung gehört „" + name + "“? Das merkt sich die App für alle Wochen." })].concat(knoepfe);
   if (entfernen) {
     inhalt.push(el("button", {
       class: "knopf knopf-gefahr abt-entfernen", type: "button", text: "Von der Liste entfernen",
@@ -3248,10 +3293,10 @@ const SYNC_TABELLEN = [
     neuLaden: function () { return abteilungenNeuLaden(); },
     schluesselLokal: function (r) { return r.id; },
     schluesselServer: function (z) { return z.id; },
-    zuServer: function (a) { return { id: a.id, daten: { name: a.name, abteilung: a.abteilung }, geloescht: !!a.geloescht, aktualisiert: a.aktualisiert }; },
+    zuServer: function (a) { return { id: a.id, daten: { name: a.name, abteilung: a.abteilung || "", emoji: a.emoji || "" }, geloescht: !!a.geloescht, aktualisiert: a.aktualisiert }; },
     vonServer: function (z) {
       const d = z.daten || {};
-      return { id: z.id, name: d.name || "", abteilung: d.abteilung || "", geloescht: !!z.geloescht, aktualisiert: z.aktualisiert };
+      return { id: z.id, name: d.name || "", abteilung: d.abteilung || "", emoji: d.emoji || "", geloescht: !!z.geloescht, aktualisiert: z.aktualisiert };
     }
   },
   {
