@@ -841,6 +841,7 @@ function formularOeffnen(gericht) {
   const n = g.naehrwerte || {};
   let bild = g.bild || null;
   let speichertGerade = false;
+  let zutatenGeprueft = false; // "Zutaten prüfen" läuft nur einmal pro neuem Rezept
 
   const zurueck = function () { if (neu) blattSchliessen(); else detailOeffnen(g.id); };
 
@@ -1027,6 +1028,19 @@ function formularOeffnen(gericht) {
       geloescht: false,
       dirty: 1
     };
+
+    // Neues Rezept: Zutaten, die die App keiner Abteilung zuordnen kann, vor dem Speichern prüfen lassen.
+    if (neu && !zutatenGeprueft) {
+      const unsicher = unsichereZutaten(zutaten);
+      if (unsicher.length > 0) {
+        const formularKnoten = Array.from(blatt.childNodes);
+        zutatenPruefen(unsicher, new Set(zutaten.map(function (z) { return z.name.trim().toLowerCase(); })).size - unsicher.length, {
+          zurueck: function () { blatt.replaceChildren.apply(blatt, formularKnoten); },
+          weiter: function () { zutatenGeprueft = true; speichern(); }
+        });
+        return;
+      }
+    }
 
     speichertGerade = true;
     try {
@@ -1833,6 +1847,62 @@ async function tagSetzen(montag, index, gerichtId) {
   } catch (fehler) {
     alert("Das Speichern hat leider nicht geklappt.");
   }
+}
+
+// Zutaten eines neuen Rezepts, die automatisch in "Sonstiges" landen würden und für die es noch keine eigene Zuordnung gibt.
+function unsichereZutaten(zutaten) {
+  const gesehen = new Set(), liste = [];
+  zutaten.forEach(function (z) {
+    const k = z.name.trim().toLowerCase();
+    if (!k || gesehen.has(k)) return;
+    gesehen.add(k);
+    const wahl = abteilungsWahl.get(abteilungsId(z.name));
+    if (wahl && !wahl.geloescht) return;
+    if (abteilungAutomatisch(z.name) === "sonstiges" && !vorratNamenSet().has(k)) liste.push(z);
+  });
+  return liste;
+}
+
+// Blatt "Zutaten prüfen": für jede unsichere Zutat die Abteilung wählen. Gewählte Abweichungen werden gemerkt.
+function zutatenPruefen(unsicher, klare, aktionen) {
+  const wahl = new Map(unsicher.map(function (z) { return [z.name.trim().toLowerCase(), "sonstiges"]; }));
+  const karten = unsicher.map(function (z) {
+    const schluessel = z.name.trim().toLowerCase();
+    const pillen = el("div", { class: "pruef-pillen" });
+    function zeichnen() {
+      pillen.replaceChildren.apply(pillen, abteilungsListe().map(function (a) {
+        return el("button", {
+          class: "pruef-pille" + (wahl.get(schluessel) === a.id ? " aktiv" : ""), type: "button", "data-abt": a.id,
+          onclick: function () { wahl.set(schluessel, a.id); zeichnen(); }
+        }, a.emoji + " " + a.name);
+      }));
+    }
+    zeichnen();
+    return el("div", { class: "pruef-karte", "data-zutat": z.name },
+      el("div", { class: "pruef-kopf" }, symbolKnoten(z.name), el("b", { text: z.name }),
+        el("span", { class: "leise", text: z.menge === null || z.menge === undefined ? "" : zahlText(z.menge) + " " + z.einheit })),
+      pillen);
+  });
+  blattZeigen({
+    titel: "Zutaten prüfen",
+    links: { text: "Zurück", aktion: aktionen.zurueck },
+    inhalt: [
+      el("p", { class: "leise", text: (unsicher.length === 1 ? "Bei 1 Zutat bin ich" : "Bei " + unsicher.length + " Zutaten bin ich") + " unsicher. Wähle die Abteilung, dann merke ich sie mir für alle Rezepte." })
+    ].concat(karten, [
+      klare > 0 ? el("p", { class: "leise hinweis-klein", text: "✓ " + klare + (klare === 1 ? " weitere Zutat ist" : " weitere Zutaten sind") + " klar zugeordnet." }) : null,
+      el("button", {
+        class: "knopf knopf-primaer pruef-weiter", type: "button", text: "Rezept speichern",
+        onclick: async function () {
+          for (const z of unsicher) {
+            const w = wahl.get(z.name.trim().toLowerCase());
+            if (w && w !== "sonstiges") await abteilungSetzen(z.name, w);
+          }
+          aktionen.weiter();
+        }
+      }),
+      el("button", { class: "textknopf pruef-skip", type: "button", text: "Überspringen", onclick: aktionen.weiter })
+    ])
+  });
 }
 
 /* ---------- Symbole für Artikel (Emoji; sonst der Anfangsbuchstabe) ---------- */

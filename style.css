@@ -952,3 +952,14 @@ body, button, input, select, textarea {
 .abt-chip { width: 40px; height: 40px; font-size: 1.3rem; background: transparent; border: 1px solid var(--linie); border-radius: 10px; cursor: pointer; }
 .abt-neu-zeile { display: grid; grid-template-columns: 64px 1fr 48px; gap: 8px; }
 .abt-neu-zeile .eingabe { min-width: 0; }
+
+/* Zutaten prüfen */
+.pruef-karte { margin-bottom: 10px; padding: 12px; background: var(--karte); border: 1px solid var(--akzent); border-radius: 14px; }
+.pruef-kopf { display: flex; align-items: center; gap: 10px; }
+.pruef-kopf .symbol { font-size: 1.4rem; }
+.pruef-kopf b { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.pruef-pillen { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.pruef-pille { padding: 6px 10px; font: inherit; font-size: 0.8rem; color: var(--text); background: transparent; border: 1px solid var(--linie); border-radius: 16px; cursor: pointer; }
+.pruef-pille.aktiv { color: var(--akzent); border-color: var(--akzent); }
+.pruef-weiter { width: 100%; margin-top: 14px; }
+.pruef-skip { display: block; margin: 12px auto 0; }
