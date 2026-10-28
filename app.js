@@ -335,7 +335,7 @@ let abteilungsListeRoh = new Map(); // eigene Abteilungen und Änderungen an den
 let abteilungsWahl = new Map(); // von Hand gewählte Abteilungen: Schlüssel = id (aus dem Namen abgeleitet)
 let vorrat = new Map();      // Vorrat: Schlüssel = id (inkl. gelöschter)
 let extras = new Map();      // eigene Artikel auf der Einkaufsliste: Schlüssel = id (inkl. gelöschter, für Vorschläge)
-let extraEntwurf = { name: "", menge: "", einheit: "Stück" }; // halb getippter Artikel bleibt beim Neuzeichnen erhalten
+let extraEntwurf = { name: "", menge: "", einheit: "Stück", abt: "" }; // halb getippter Artikel bleibt beim Neuzeichnen erhalten
 
 function gerichteAbleiten() {
   gerichte = Array.from(gerichteRoh.values()).filter(function (g) { return !g.geloescht; });
@@ -2509,7 +2509,18 @@ function extraEingabe(woche) {
   const einheit = el("select", { id: "extra-einheit", class: "eingabe extra-einheit", "aria-label": "Einheit" },
     EXTRA_EINHEITEN.map(function (e) { return el("option", { value: e, text: e }); }));
   einheit.value = EXTRA_EINHEITEN.indexOf(extraEntwurf.einheit) >= 0 ? extraEntwurf.einheit : "Stück";
-  name.addEventListener("input", function () { extraEntwurf.name = name.value; });
+  // Abteilung: schlägt beim Tippen die bekannte/automatische Abteilung vor; eine eigene Wahl bleibt bestehen.
+  const abtWahl = el("select", { id: "extra-abt", class: "eingabe extra-abt", "aria-label": "Abteilung" },
+    [el("option", { value: "", text: "Abteilung: automatisch" })].concat(abteilungsListe().map(function (a) {
+      return el("option", { value: a.id, text: a.emoji + " " + a.name });
+    })));
+  function abtVorschlagen() {
+    if (extraEntwurf.abt) { abtWahl.value = extraEntwurf.abt; return; }
+    abtWahl.value = name.value.trim() ? abteilungFuer(name.value) : "";
+  }
+  abtVorschlagen();
+  abtWahl.addEventListener("change", function () { extraEntwurf.abt = abtWahl.value; });
+  name.addEventListener("input", function () { extraEntwurf.name = name.value; abtVorschlagen(); });
   menge.addEventListener("input", function () { extraEntwurf.menge = menge.value; });
   einheit.addEventListener("change", function () { extraEntwurf.einheit = einheit.value; });
   const formular = el("form", {
@@ -2519,10 +2530,10 @@ function extraEingabe(woche) {
       e.preventDefault();
       // Ohne Zahl keine Einheit; sonst "2 Dose" (so wird es auch gespeichert und summiert).
       const zahl = menge.value.trim();
-      extraHinzufuegen(woche, name.value, zahl ? zahl + " " + einheit.value : "");
+      extraHinzufuegen(woche, name.value, zahl ? zahl + " " + einheit.value : "", abtWahl.value);
     }
   },
-    name, menge, einheit,
+    name, abtWahl, menge, einheit,
     el("button", { class: "knopf knopf-primaer extra-plus", type: "submit", "aria-label": "Zur Liste hinzufügen", text: "+" })
   );
   const kopf = el("button", { class: "import-kopf", type: "button", "aria-expanded": extraOffen ? "true" : "false" },
@@ -2596,11 +2607,13 @@ async function extraSpeichern(eintraege) {
   }
 }
 
-async function extraHinzufuegen(woche, nameText, mengeText2) {
+async function extraHinzufuegen(woche, nameText, mengeText2, abteilung) {
   const name = nameText.trim();
   if (name === "") return;
   const menge = mengeText2.trim();
-  extraEntwurf = { name: "", menge: "", einheit: extraEntwurf.einheit };
+  extraEntwurf = { name: "", menge: "", einheit: extraEntwurf.einheit, abt: "" };
+  // Gewählte Abteilung merken (weicht sie vom Vorschlag ab, gilt sie künftig für diesen Namen).
+  if (abteilung && abteilung !== abteilungFuer(name)) await abteilungSetzen(name, abteilung);
   pushMeldungVormerken(name);
   // Gibt es den Artikel in dieser Woche schon, wird nichts doppelt angelegt.
   const vorhanden = Array.from(extras.values()).find(function (e) {
