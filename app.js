@@ -2183,19 +2183,83 @@ function abteilungsDatensatz(a, aenderungen) {
   });
 }
 
-// Neue Reihenfolge speichern: alle bewegten Abteilungen bekommen fortlaufende Positionen.
-async function abteilungVerschieben(id, richtung) {
-  const liste = abteilungsListe().filter(function (a) { return !a.fest; });
-  const i = liste.findIndex(function (a) { return a.id === id; });
-  const j = i + richtung;
-  if (i < 0 || j < 0 || j >= liste.length) return;
-  const tausch = liste.slice(); tausch[i] = liste[j]; tausch[j] = liste[i];
+// Speichert die Reihenfolge der verschiebbaren Abteilungen (Liste von IDs): fortlaufende Positionen für alle geänderten.
+async function abteilungReihenfolgeSpeichern(ids) {
+  const nachId = new Map(abteilungsListe().map(function (a) { return [a.id, a]; }));
   const geaendert = [];
-  tausch.forEach(function (a, k) {
+  ids.forEach(function (id, k) {
+    const a = nachId.get(id);
+    if (!a || a.fest) return;
     const pos = (k + 1) * 10;
     if (a.pos !== pos || !abteilungsListeRoh.has(a.id)) geaendert.push(abteilungsDatensatz(a, { pos: pos }));
   });
-  await abteilungListeSpeichern(geaendert);
+  if (geaendert.length > 0) await abteilungListeSpeichern(geaendert);
+}
+
+// Ziehen am Griff (≡): die Zeile folgt dem Finger, die anderen weichen aus; beim Loslassen wird gespeichert.
+function abteilungZiehenEinrichten(einheiten) {
+  einheiten.forEach(function (u, index) {
+    const griff = u.griff;
+    if (!griff) return;
+    griff.addEventListener("pointerdown", function (e) {
+      if (e.button !== undefined && e.button > 0) return;
+      e.preventDefault();
+      const scroller = griff.closest(".blatt-inhalt") || document.scrollingElement;
+      const rects = einheiten.map(function (x) { return x.el.getBoundingClientRect(); });
+      const mitten = rects.map(function (r) { return r.top + r.height / 2; });
+      const hoehe = rects[index].height + 8;
+      const startY = e.clientY, startScroll = scroller.scrollTop;
+      let y = e.clientY, ziel = index, aktiv = true, rahmen = 0;
+      try { griff.setPointerCapture(e.pointerId); } catch (x) { /* egal */ }
+      u.el.classList.add("zieht");
+      function zeichnen() {
+        const dy = (y - startY) + (scroller.scrollTop - startScroll);
+        u.el.style.transform = "translateY(" + dy + "px)";
+        const mitteZiehend = mitten[index] + dy;
+        let best = index, bestAbstand = Infinity;
+        mitten.forEach(function (m, k) { const d = Math.abs(m - mitteZiehend); if (d < bestAbstand) { bestAbstand = d; best = k; } });
+        ziel = best;
+        einheiten.forEach(function (x, k) {
+          if (k === index) return;
+          let v = 0;
+          if (ziel > index && k > index && k <= ziel) v = -hoehe;
+          if (ziel < index && k >= ziel && k < index) v = hoehe;
+          x.el.style.transform = v ? "translateY(" + v + "px)" : "";
+        });
+      }
+      function scrollen() {
+        if (!aktiv) return;
+        const r = scroller.getBoundingClientRect();
+        if (y < r.top + 70) scroller.scrollTop -= 10;
+        else if (y > r.bottom - 70) scroller.scrollTop += 10;
+        zeichnen();
+        rahmen = requestAnimationFrame(scrollen);
+      }
+      function bewegen(ev) { y = ev.clientY; zeichnen(); }
+      function ende(ev) {
+        if (!aktiv) return;
+        aktiv = false;
+        cancelAnimationFrame(rahmen);
+        griff.removeEventListener("pointermove", bewegen);
+        griff.removeEventListener("pointerup", ende);
+        griff.removeEventListener("pointercancel", ende);
+        const ids = einheiten.map(function (x) { return x.id; });
+        const verschoben = ids.splice(index, 1)[0];
+        ids.splice(ziel, 0, verschoben);
+        if (ev.type === "pointercancel" || ziel === index) {
+          einheiten.forEach(function (x) { x.el.style.transform = ""; x.el.classList.remove("zieht"); });
+          return;
+        }
+        // Zeilen gleich an die neue Stelle setzen; der gespeicherte Stand zeichnet danach neu.
+        einheiten.forEach(function (x) { x.el.style.transform = ""; x.el.classList.remove("zieht"); });
+        abteilungReihenfolgeSpeichern(ids);
+      }
+      griff.addEventListener("pointermove", bewegen);
+      griff.addEventListener("pointerup", ende);
+      griff.addEventListener("pointercancel", ende);
+      rahmen = requestAnimationFrame(scrollen);
+    });
+  });
 }
 
 async function abteilungAnlegen(name, emoji) {
@@ -2221,8 +2285,8 @@ function abteilungenVerwalten(zurueck) {
   function zeichnen() {
     const liste = abteilungsListe();
     const bewegbar = liste.filter(function (a) { return !a.fest; });
+    const einheiten = []; // verschiebbare Zeilen (bei geöffnetem Emoji-Editor der ganze Block)
     const zeilen = liste.map(function (a) {
-      const idx = bewegbar.findIndex(function (b) { return b.id === a.id; });
       const kopf = el("div", { class: "abt-zeile", "data-abt": a.id },
         el("button", {
           class: "abt-emoji-knopf", type: "button", text: a.emoji, "aria-label": "Emoji von " + a.name + " ändern",
@@ -2230,8 +2294,7 @@ function abteilungenVerwalten(zurueck) {
         }),
         el("span", { class: "posten-name", text: a.name }),
         a.fest ? el("span", { class: "leise", text: "immer unten" }) : el("span", { class: "abt-aktionen" },
-          el("button", { class: "abt-pfeil", type: "button", "aria-label": a.name + " nach oben", disabled: idx === 0, text: "↑", onclick: function () { abteilungVerschieben(a.id, -1); } }),
-          el("button", { class: "abt-pfeil", type: "button", "aria-label": a.name + " nach unten", disabled: idx === bewegbar.length - 1, text: "↓", onclick: function () { abteilungVerschieben(a.id, 1); } }),
+          el("button", { class: "abt-griff", type: "button", "aria-label": a.name + " verschieben (ziehen)", title: "Ziehen zum Verschieben", text: "≡" }),
           a.eingebaut ? null : el("button", {
             class: "abt-pfeil", type: "button", "aria-label": a.name + " löschen", text: "✕",
             onclick: function () {
@@ -2242,17 +2305,20 @@ function abteilungenVerwalten(zurueck) {
           })
         )
       );
-      if (offenId !== a.id) return kopf;
+      if (offenId !== a.id) { if (!a.fest) einheiten.push({ id: a.id, el: kopf, griff: kopf.querySelector(".abt-griff") }); return kopf; }
       const feld = el("input", { type: "text", class: "eingabe abt-emoji-feld", value: a.emoji, "aria-label": "Emoji eingeben", autocomplete: "off" });
       feld.addEventListener("change", function () {
         const e = emojiNehmen(feld.value);
         if (e) abteilungListeSpeichern([abteilungsDatensatz(a, { emoji: e })]);
       });
-      return el("div", { class: "abt-block" }, kopf,
+      const block = el("div", { class: "abt-block" }, kopf,
         el("div", { class: "abt-editor" }, el("p", { class: "leise hinweis-klein", text: "Tippe ein Emoji ein oder wähle eins aus:" }), feld,
           chips(function (e) { abteilungListeSpeichern([abteilungsDatensatz(a, { emoji: e })]); })));
+      if (!a.fest) einheiten.push({ id: a.id, el: block, griff: kopf.querySelector(".abt-griff") });
+      return block;
     });
     box.replaceChildren.apply(box, zeilen);
+    abteilungZiehenEinrichten(einheiten);
   }
   zeichnen();
   abteilungVerwaltenNeuzeichnen = zeichnen;
@@ -2274,7 +2340,7 @@ function abteilungenVerwalten(zurueck) {
   function schliessen() { abteilungVerwaltenNeuzeichnen = null; if (zurueck) zurueck(); else blattSchliessen(); }
   blattZeigen({
     titel: "Abteilungen", links: { text: "Fertig", aktion: schliessen },
-    inhalt: [el("p", { class: "leise", text: "Emoji antippen zum Ändern, mit ↑ ↓ die Reihenfolge anpassen. „Sonstiges“ bleibt immer unten." }), box, neuForm]
+    inhalt: [el("p", { class: "leise", text: "Emoji antippen zum Ändern. Am Griff ≡ nach oben oder unten ziehen, um die Reihenfolge anzupassen. „Sonstiges“ bleibt immer unten." }), box, neuForm]
   });
 }
 let abteilungVerwaltenNeuzeichnen = null;
