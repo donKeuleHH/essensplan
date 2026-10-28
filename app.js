@@ -2180,10 +2180,6 @@ function abteilungOeffnen(name, entfernen) {
     );
   });
   const inhalt = [el("p", { class: "leise", text: "In welche Abteilung gehört „" + name + "“? Das merkt sich die App für alle Wochen." })].concat(knoepfe);
-  inhalt.push(el("button", {
-    class: "knopf abt-verwalten", type: "button", text: "Abteilungen verwalten …",
-    onclick: function () { abteilungenVerwalten(function () { abteilungOeffnen(name, entfernen); }); }
-  }));
   if (entfernen) {
     inhalt.push(el("button", {
       class: "knopf knopf-gefahr abt-entfernen", type: "button", text: "Von der Liste entfernen",
@@ -2272,6 +2268,14 @@ document.addEventListener("visibilitychange", function () {
 /* ---------- Vorrat: Zutaten, die immer da sind ---------- */
 
 const VORRAT_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8"/><path d="M7.5 6.5h9"/><path d="M7 6.5c-1 .8-1.5 1.8-1.5 3v9a2.5 2.5 0 0 0 2.5 2.5h8a2.5 2.5 0 0 0 2.5-2.5v-9c0-1.2-.5-2.2-1.5-3"/><rect x="8.5" y="11" width="7" height="5" rx="1"/></svg>';
+
+const ABTEILUNGEN_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>';
+
+function abteilungenIconKnoten() {
+  const e = el("span", { class: "vorrat-icon" });
+  e.innerHTML = ABTEILUNGEN_ICON;
+  return e;
+}
 
 function vorratIconKnoten() {
   const e = el("span", { class: "vorrat-icon" });
@@ -2406,7 +2410,10 @@ function einkaufZeichnen() {
   const erledigt = alle.filter(function (x) { return x.erledigt; });
 
   const hatteFokus = extraOffen && document.activeElement && document.activeElement.id === "extra-name";
-  const kopfIcons = [{ beschriftung: "Vorrat", knoten: vorratIconKnoten(), aktion: vorratOeffnen }];
+  const kopfIcons = [
+    { beschriftung: "Abteilungen", knoten: abteilungenIconKnoten(), aktion: function () { abteilungenVerwalten(null); } },
+    { beschriftung: "Vorrat", knoten: vorratIconKnoten(), aktion: vorratOeffnen }
+  ];
   if (offen.length > 0) {
     kopfIcons.push({
       beschriftung: "Liste teilen", knoten: teilenIconKnoten(),
