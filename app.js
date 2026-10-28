@@ -15,7 +15,7 @@ let db = null;
 
 function datenbankOeffnen() {
   return new Promise(function (resolve, reject) {
-    const anfrage = indexedDB.open("essensplan", 7);
+    const anfrage = indexedDB.open("essensplan", 8);
     anfrage.onupgradeneeded = function () {
       const d = anfrage.result;
       if (!d.objectStoreNames.contains("gerichte")) {
@@ -45,6 +45,10 @@ function datenbankOeffnen() {
       // Ab Version 7: von Hand geänderte Abteilungen einzelner Zutaten
       if (!d.objectStoreNames.contains("abteilungen")) {
         d.createObjectStore("abteilungen", { keyPath: "id" });
+      }
+      // Ab Version 8: eigene Abteilungen, Emojis und Reihenfolge
+      if (!d.objectStoreNames.contains("abteilungsliste")) {
+        d.createObjectStore("abteilungsliste", { keyPath: "id" });
       }
     };
     anfrage.onsuccess = function () { resolve(anfrage.result); };
@@ -327,6 +331,7 @@ let gerichteRoh = new Map(); // alle Gerichte inkl. gelöschter (der Löschmarke
 let gerichte = [];           // nur die sichtbaren Gerichte
 let plaene = new Map();      // Wochenpläne: Schlüssel = Datum des Montags, z. B. "2026-10-19"
 let haken = new Map();       // abgehakte Einkaufsposten: Schlüssel = "Woche|Posten"
+let abteilungsListeRoh = new Map(); // eigene Abteilungen und Änderungen an den eingebauten: Schlüssel = id
 let abteilungsWahl = new Map(); // von Hand gewählte Abteilungen: Schlüssel = id (aus dem Namen abgeleitet)
 let vorrat = new Map();      // Vorrat: Schlüssel = id (inkl. gelöschter)
 let extras = new Map();      // eigene Artikel auf der Einkaufsliste: Schlüssel = id (inkl. gelöschter, für Vorschläge)
@@ -1905,7 +1910,7 @@ function langDruck(knopf, aktion) {
 
 /* ---------- Abteilungen im Supermarkt ---------- */
 
-const ABTEILUNGEN = [
+const ABTEILUNGEN_STANDARD = [
   { id: "obst", name: "Obst & Gemüse", emoji: "🥦" },
   { id: "fleisch", name: "Fleisch & Fisch", emoji: "🥩" },
   { id: "kuehl", name: "Kühlregal", emoji: "🥛" },
@@ -1915,6 +1920,25 @@ const ABTEILUNGEN = [
   { id: "getraenke", name: "Getränke", emoji: "🥤" },
   { id: "sonstiges", name: "Sonstiges", emoji: "🛒" }
 ];
+
+// Eingebaute Abteilungen (Emoji und Reihenfolge änderbar) plus eigene; "Sonstiges" steht immer ganz unten.
+function abteilungsListe() {
+  const liste = [];
+  ABTEILUNGEN_STANDARD.forEach(function (a, i) {
+    const r = abteilungsListeRoh.get(a.id);
+    liste.push({
+      id: a.id, name: a.name, emoji: (r && r.emoji) || a.emoji, pos: r && typeof r.pos === "number" ? r.pos : (i + 1) * 10,
+      eingebaut: true, fest: a.id === "sonstiges"
+    });
+  });
+  abteilungsListeRoh.forEach(function (r) {
+    if (r.eingebaut || r.geloescht || ABTEILUNGEN_STANDARD.some(function (a) { return a.id === r.id; })) return;
+    liste.push({ id: r.id, name: r.name, emoji: r.emoji || "🛒", pos: typeof r.pos === "number" ? r.pos : 1000, eingebaut: false, fest: false });
+  });
+  const sonst = liste.filter(function (a) { return a.fest; });
+  return liste.filter(function (a) { return !a.fest; })
+    .sort(function (a, b) { return a.pos - b.pos || a.name.localeCompare(b.name, "de"); }).concat(sonst);
+}
 
 // Abteilung je Symbol aus ARTIKEL_SYMBOLE (alles, was dort nicht steht, landet in "Sonstiges").
 const SYMBOL_ABTEILUNG = {
@@ -1989,7 +2013,7 @@ function abteilungsId(name) {
 
 function abteilungFuer(name) {
   const w = abteilungsWahl.get(abteilungsId(name));
-  if (w && !w.geloescht && ABTEILUNGEN.some(function (a) { return a.id === w.abteilung; })) return w.abteilung;
+  if (w && !w.geloescht && abteilungsListe().some(function (a) { return a.id === w.abteilung; })) return w.abteilung;
   return abteilungAutomatisch(name);
 }
 
@@ -2013,10 +2037,139 @@ async function abteilungSetzen(name, abteilung) {
   }
 }
 
+const ABT_EMOJIS = ["🥦","🍎","🥩","🐟","🥛","🧀","🍞","🥫","🧂","🥤","🍷","🧊","🍦","🍫","🧻","🧴","🧼","🐾","🌿","🍽️","🛒","🏠","💊","🎁"];
+
+async function abteilungListeSpeichern(eintraege) {
+  eintraege.forEach(function (r) { abteilungsListeRoh.set(r.id, r); });
+  einkaufZeichnen();
+  try {
+    await transaktion(["abteilungsliste"], function (st) { eintraege.forEach(function (r) { st.abteilungsliste.put(r); }); });
+    await abteilungsListeNeuLaden();
+    syncAnstossen();
+  } catch (fehler) {
+    alert("Das Speichern hat leider nicht geklappt.");
+  }
+}
+
+// Schreibt Position (und ggf. Änderungen) für die Abteilungen: bestehender Datensatz + neue Werte.
+function abteilungsDatensatz(a, aenderungen) {
+  const alt = abteilungsListeRoh.get(a.id);
+  return Object.assign({ id: a.id, name: a.name, emoji: a.emoji, pos: a.pos, eingebaut: !!a.eingebaut, geloescht: false }, alt || {}, aenderungen, {
+    aktualisiert: zeitNach(alt), dirty: 1
+  });
+}
+
+// Neue Reihenfolge speichern: alle bewegten Abteilungen bekommen fortlaufende Positionen.
+async function abteilungVerschieben(id, richtung) {
+  const liste = abteilungsListe().filter(function (a) { return !a.fest; });
+  const i = liste.findIndex(function (a) { return a.id === id; });
+  const j = i + richtung;
+  if (i < 0 || j < 0 || j >= liste.length) return;
+  const tausch = liste.slice(); tausch[i] = liste[j]; tausch[j] = liste[i];
+  const geaendert = [];
+  tausch.forEach(function (a, k) {
+    const pos = (k + 1) * 10;
+    if (a.pos !== pos || !abteilungsListeRoh.has(a.id)) geaendert.push(abteilungsDatensatz(a, { pos: pos }));
+  });
+  await abteilungListeSpeichern(geaendert);
+}
+
+async function abteilungAnlegen(name, emoji) {
+  const n = name.trim();
+  if (!n) return;
+  if (abteilungsListe().some(function (a) { return a.name.toLowerCase() === n.toLowerCase(); })) { alert("Diese Abteilung gibt es schon."); return; }
+  const liste = abteilungsListe().filter(function (a) { return !a.fest; });
+  const pos = liste.length ? Math.max.apply(null, liste.map(function (a) { return a.pos; })) + 10 : 10;
+  await abteilungListeSpeichern([{
+    id: neueId(), name: n, emoji: emoji || "🛒", pos: pos, eingebaut: false, geloescht: false, aktualisiert: Date.now(), dirty: 1
+  }]);
+}
+
+function abteilungenVerwalten(zurueck) {
+  const box = el("div", { class: "abt-verw" });
+  let offenId = null;
+  const neuName = el("input", { type: "text", class: "eingabe", placeholder: "Name der neuen Abteilung", "aria-label": "Neue Abteilung", autocomplete: "off", autocapitalize: "sentences" });
+  let neuEmoji = "🛒";
+  const neuEmojiFeld = el("input", { type: "text", class: "eingabe abt-emoji-feld", value: neuEmoji, "aria-label": "Emoji", autocomplete: "off" });
+  neuEmojiFeld.addEventListener("input", function () { neuEmoji = emojiNehmen(neuEmojiFeld.value) || "🛒"; });
+  function emojiNehmen(text) {
+    const t = text.trim();
+    if (!t) return "";
+    const teile = window.Intl && Intl.Segmenter
+      ? Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(t)).map(function (x) { return x.segment; })
+      : Array.from(t);
+    return teile[teile.length - 1];
+  }
+  function chips(waehlen) {
+    return el("div", { class: "abt-chips" }, ABT_EMOJIS.map(function (e) {
+      return el("button", { class: "abt-chip", type: "button", text: e, "aria-label": "Emoji " + e, onclick: function () { waehlen(e); } });
+    }));
+  }
+  function zeichnen() {
+    const liste = abteilungsListe();
+    const bewegbar = liste.filter(function (a) { return !a.fest; });
+    const zeilen = liste.map(function (a) {
+      const idx = bewegbar.findIndex(function (b) { return b.id === a.id; });
+      const kopf = el("div", { class: "abt-zeile", "data-abt": a.id },
+        el("button", {
+          class: "abt-emoji-knopf", type: "button", text: a.emoji, "aria-label": "Emoji von " + a.name + " ändern",
+          onclick: function () { offenId = offenId === a.id ? null : a.id; zeichnen(); }
+        }),
+        el("span", { class: "posten-name", text: a.name }),
+        a.fest ? el("span", { class: "leise", text: "immer unten" }) : el("span", { class: "abt-aktionen" },
+          el("button", { class: "abt-pfeil", type: "button", "aria-label": a.name + " nach oben", disabled: idx === 0, text: "↑", onclick: function () { abteilungVerschieben(a.id, -1); } }),
+          el("button", { class: "abt-pfeil", type: "button", "aria-label": a.name + " nach unten", disabled: idx === bewegbar.length - 1, text: "↓", onclick: function () { abteilungVerschieben(a.id, 1); } }),
+          a.eingebaut ? null : el("button", {
+            class: "abt-pfeil", type: "button", "aria-label": a.name + " löschen", text: "✕",
+            onclick: function () {
+              if (confirm("Abteilung „" + a.name + "“ löschen? Die Artikel darin kommen wieder in ihre automatische Abteilung.")) {
+                abteilungListeSpeichern([abteilungsDatensatz(a, { geloescht: true })]);
+              }
+            }
+          })
+        )
+      );
+      if (offenId !== a.id) return kopf;
+      const feld = el("input", { type: "text", class: "eingabe abt-emoji-feld", value: a.emoji, "aria-label": "Emoji eingeben", autocomplete: "off" });
+      feld.addEventListener("change", function () {
+        const e = emojiNehmen(feld.value);
+        if (e) abteilungListeSpeichern([abteilungsDatensatz(a, { emoji: e })]);
+      });
+      return el("div", { class: "abt-block" }, kopf,
+        el("div", { class: "abt-editor" }, el("p", { class: "leise hinweis-klein", text: "Tippe ein Emoji ein oder wähle eins aus:" }), feld,
+          chips(function (e) { abteilungListeSpeichern([abteilungsDatensatz(a, { emoji: e })]); })));
+    });
+    box.replaceChildren.apply(box, zeilen);
+  }
+  zeichnen();
+  abteilungVerwaltenNeuzeichnen = zeichnen;
+  const neuForm = el("form", {
+    class: "abt-neu",
+    onsubmit: function (e) {
+      e.preventDefault();
+      const n = neuName.value;
+      neuName.value = ""; neuEmojiFeld.value = "🛒";
+      const em = neuEmoji; neuEmoji = "🛒";
+      abteilungAnlegen(n, em);
+    }
+  },
+    el("h3", { class: "abschnitt", text: "Neue Abteilung" }),
+    el("div", { class: "abt-neu-zeile" }, neuEmojiFeld, neuName,
+      el("button", { class: "knopf knopf-primaer extra-plus", type: "submit", "aria-label": "Abteilung anlegen", text: "+" })),
+    chips(function (e) { neuEmoji = e; neuEmojiFeld.value = e; })
+  );
+  function schliessen() { abteilungVerwaltenNeuzeichnen = null; if (zurueck) zurueck(); else blattSchliessen(); }
+  blattZeigen({
+    titel: "Abteilungen", links: { text: "Fertig", aktion: schliessen },
+    inhalt: [el("p", { class: "leise", text: "Emoji antippen zum Ändern, mit ↑ ↓ die Reihenfolge anpassen. „Sonstiges“ bleibt immer unten." }), box, neuForm]
+  });
+}
+let abteilungVerwaltenNeuzeichnen = null;
+
 // Blatt zum langen Drücken auf einen Artikel: Abteilung wählen (und bei eigenen Artikeln entfernen).
 function abteilungOeffnen(name, entfernen) {
   const aktuell = abteilungFuer(name);
-  const knoepfe = ABTEILUNGEN.map(function (a) {
+  const knoepfe = abteilungsListe().map(function (a) {
     return el("button", {
       class: "abt-wahl" + (a.id === aktuell ? " aktiv" : ""), type: "button", "data-abt": a.id,
       onclick: function () { blattSchliessen(); abteilungSetzen(name, a.id); }
@@ -2027,6 +2180,10 @@ function abteilungOeffnen(name, entfernen) {
     );
   });
   const inhalt = [el("p", { class: "leise", text: "In welche Abteilung gehört „" + name + "“? Das merkt sich die App für alle Wochen." })].concat(knoepfe);
+  inhalt.push(el("button", {
+    class: "knopf abt-verwalten", type: "button", text: "Abteilungen verwalten …",
+    onclick: function () { abteilungenVerwalten(function () { abteilungOeffnen(name, entfernen); }); }
+  }));
   if (entfernen) {
     inhalt.push(el("button", {
       class: "knopf knopf-gefahr abt-entfernen", type: "button", text: "Von der Liste entfernen",
@@ -2279,7 +2436,7 @@ function einkaufZeichnen() {
     ));
   } else {
     if (offen.length > 0) {
-      ABTEILUNGEN.forEach(function (a) {
+      abteilungsListe().forEach(function (a) {
         const gruppe = offen.filter(function (x) { return x.abt === a.id; });
         if (gruppe.length === 0) return;
         teile.push(el("h3", { class: "abschnitt abteilung", "data-abt": a.id },
@@ -2861,6 +3018,12 @@ const extrasNeuLaden = ladefunktion("extras", function (liste) {
   einkaufZeichnen();
 });
 
+const abteilungsListeNeuLaden = ladefunktion("abteilungsliste", function (liste) {
+  abteilungsListeRoh = new Map(liste.map(function (r) { return [r.id, r]; }));
+  if (abteilungVerwaltenNeuzeichnen && document.querySelector(".abt-verw")) abteilungVerwaltenNeuzeichnen();
+  einkaufZeichnen();
+});
+
 const abteilungenNeuLaden = ladefunktion("abteilungen", function (liste) {
   abteilungsWahl = new Map(liste.map(function (a) { return [a.id, a]; }));
   einkaufZeichnen();
@@ -2879,6 +3042,7 @@ async function alleNeuLaden() {
   await extrasNeuLaden();
   await vorratNeuLaden();
   await abteilungenNeuLaden();
+  await abteilungsListeNeuLaden();
 }
 
 /* ---------- Synchronisierung mit Supabase ---------- */
@@ -2998,6 +3162,21 @@ const SYNC_TABELLEN = [
     vonServer: function (z) {
       const d = z.daten || {};
       return { id: z.id, name: d.name || "", abteilung: d.abteilung || "", geloescht: !!z.geloescht, aktualisiert: z.aktualisiert };
+    }
+  },
+  {
+    name: "abteilung_liste", speicher: "abteilungsliste", konflikt: "id", block: 50,
+    liste: function () { return Array.from(abteilungsListeRoh.values()); },
+    holen: function (schluessel) { return abteilungsListeRoh.get(schluessel); },
+    neuLaden: function () { return abteilungsListeNeuLaden(); },
+    schluesselLokal: function (r) { return r.id; },
+    schluesselServer: function (z) { return z.id; },
+    zuServer: function (r) {
+      return { id: r.id, daten: { name: r.name, emoji: r.emoji, pos: r.pos, eingebaut: !!r.eingebaut }, geloescht: !!r.geloescht, aktualisiert: r.aktualisiert };
+    },
+    vonServer: function (z) {
+      const d = z.daten || {};
+      return { id: z.id, name: d.name || "", emoji: d.emoji || "", pos: typeof d.pos === "number" ? d.pos : 1000, eingebaut: !!d.eingebaut, geloescht: !!z.geloescht, aktualisiert: z.aktualisiert };
     }
   }
 ];

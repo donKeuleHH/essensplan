@@ -937,3 +937,18 @@ body, button, input, select, textarea {
 .abt-emoji { font-size: 1.3rem; }
 .abt-haken { flex: none; font-weight: 700; }
 .abt-entfernen { width: 100%; margin-top: 14px; }
+
+/* Abteilungen verwalten */
+.abt-verwalten { width: 100%; margin-top: 14px; }
+.abt-zeile { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin-bottom: 8px; background: var(--karte); border: 1px solid var(--linie); border-radius: 14px; }
+.abt-zeile .posten-name { flex: 1; min-width: 0; }
+.abt-emoji-knopf { flex: none; width: 42px; height: 42px; font-size: 1.4rem; background: var(--karte-hell, transparent); border: 1px solid var(--linie); border-radius: 12px; cursor: pointer; }
+.abt-aktionen { display: flex; gap: 4px; }
+.abt-pfeil { width: 36px; height: 36px; padding: 0; font: inherit; font-size: 1rem; color: var(--akzent); background: transparent; border: 0; cursor: pointer; }
+.abt-pfeil:disabled { opacity: 0.25; cursor: default; }
+.abt-editor { margin: -4px 0 10px; padding: 10px; background: var(--karte); border: 1px solid var(--linie); border-radius: 14px; }
+.abt-emoji-feld { width: 64px; text-align: center; font-size: 1.3rem; }
+.abt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.abt-chip { width: 40px; height: 40px; font-size: 1.3rem; background: transparent; border: 1px solid var(--linie); border-radius: 10px; cursor: pointer; }
+.abt-neu-zeile { display: grid; grid-template-columns: 64px 1fr 48px; gap: 8px; }
+.abt-neu-zeile .eingabe { min-width: 0; }
