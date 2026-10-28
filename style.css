@@ -980,3 +980,8 @@ body, button, input, select, textarea {
 .zieht { transition: none !important; position: relative; z-index: 5; box-shadow: 0 10px 28px rgba(0,0,0,.55); }
 .sicherung-karte { margin-top: 12px; padding: 14px; }
 .sicherung-karte .knopf { width: 100%; margin-top: 8px; }
+
+/* Hinweis auf neue App-Version */
+.update-banner { position: fixed; left: 0; right: 0; top: 0; z-index: 400; display: flex; align-items: center; gap: 12px; padding: calc(10px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); background: var(--karte); border-bottom: 1px solid var(--akzent); box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.update-text { flex: 1; min-width: 0; font-size: 0.9rem; line-height: 1.3; }
+.update-knopf { flex: none; padding: 8px 16px; }

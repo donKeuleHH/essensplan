@@ -3649,7 +3649,8 @@ async function synchronisieren() {
     sbSitzung = sitzung && sitzung.data ? sitzung.data.session : null;
     if (!sbSitzung) { syncStatusSetzen("abgemeldet"); return; }
     syncStatusSetzen("laeuft");
-    for (const spec of SYNC_TABELLEN) await pushen(spec);
+    // Läuft eine veraltete App-Version, wird nichts hochgeladen: sie könnte neuere Felder überschreiben.
+    if (!appVeraltet) { for (const spec of SYNC_TABELLEN) await pushen(spec); }
     for (const spec of SYNC_TABELLEN) await pullen(spec);
     letzteSync = Date.now();
     syncStatusSetzen("ok");
@@ -4056,6 +4057,58 @@ function splashAusblenden() {
 setTimeout(splashAusblenden, 6000); // Sicherheitsnetz, falls beim Start etwas hängt
 
 start().then(splashAusblenden, splashAusblenden);
+
+/* ---------- Versionsprüfung: veraltete App erkennen ---------- */
+
+let appVeraltet = false;      // true, sobald auf dem Server eine neuere Version liegt
+let versionGeprueft = 0;
+const APP_VERSION_LAUFEND = (function () {
+  const f = document.querySelector("footer.version");
+  const m = f ? /Version\s+(\d+(?:\.\d+)*)/.exec(f.textContent) : null;
+  return m ? m[1] : "";
+})();
+
+function versionIstNeuer(a, b) { // ist a neuer als b?
+  const x = a.split(".").map(Number), y = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const p = x[i] || 0, q = y[i] || 0;
+    if (p !== q) return p > q;
+  }
+  return false;
+}
+
+function versionBannerZeigen(neu) {
+  if (document.getElementById("update-banner")) return;
+  const banner = el("div", { id: "update-banner", class: "update-banner", role: "status" },
+    el("span", { class: "update-text", text: "Neue Version " + neu + " verfügbar. Bis zum Neuladen wird nichts abgeglichen." }),
+    el("button", { class: "knopf knopf-primaer update-knopf", type: "button", text: "Neu laden", onclick: function () { location.reload(); } })
+  );
+  document.body.append(banner);
+}
+
+// Fragt den Server nach der aktuellen Version (liest die Fußzeile der Startseite). Ohne Netz passiert nichts.
+async function versionPruefen(erzwingen) {
+  if (!APP_VERSION_LAUFEND || appVeraltet) return appVeraltet;
+  if (!erzwingen && Date.now() - versionGeprueft < 60000) return appVeraltet;
+  versionGeprueft = Date.now();
+  try {
+    const antwort = await fetch("index.html?versionspruefung=" + Date.now(), { cache: "no-store" });
+    if (!antwort.ok) return false;
+    const text = await antwort.text();
+    const m = /<footer[^>]*class="version"[^>]*>\s*Version\s+(\d+(?:\.\d+)*)/.exec(text);
+    if (m && versionIstNeuer(m[1], APP_VERSION_LAUFEND)) {
+      appVeraltet = true;
+      versionBannerZeigen(m[1]);
+    }
+  } catch (fehler) { /* offline: später erneut */ }
+  return appVeraltet;
+}
+
+document.addEventListener("visibilitychange", function () {
+  if (document.visibilityState === "visible") versionPruefen(false);
+});
+setInterval(function () { if (document.visibilityState === "visible") versionPruefen(false); }, 15 * 60 * 1000);
+setTimeout(function () { versionPruefen(true); }, 4000);
 
 /* ---------- Offline-Fähigkeit und automatische Updates ---------- */
 
