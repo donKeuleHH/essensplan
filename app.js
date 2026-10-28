@@ -1905,6 +1905,187 @@ function zutatenPruefen(unsicher, klare, aktionen) {
   });
 }
 
+/* ---------- Sicherung: Export und Wiederherstellen ---------- */
+
+// Speicher, die in der Sicherung stehen: [Speichername, Schlüsselfeld, Anzeigename]
+const SICHERUNG_SPEICHER = [
+  ["gerichte", "id", "Rezepte"], ["wochenplan", "woche", "Wochenpläne"], ["haken", "id", "Haken"],
+  ["extras", "id", "eigene Artikel"], ["vorrat", "id", "Vorratsartikel"], ["abteilungen", "id", "Zutaten-Einstellungen"],
+  ["abteilungsliste", "id", "Abteilungen"]
+];
+
+function sicherungVersion() {
+  const f = document.querySelector("footer.version");
+  const m = f ? /Version\s+([\d.]+)/.exec(f.textContent) : null;
+  return m ? m[1] : "";
+}
+
+async function sicherungErzeugen() {
+  const daten = {};
+  for (const sp of SICHERUNG_SPEICHER) {
+    const liste = await alleLesen(sp[0]);
+    daten[sp[0]] = liste.map(function (r) { const k = Object.assign({}, r); delete k.dirty; return k; });
+  }
+  return { format: "essensplan-sicherung", formatVersion: 1, appVersion: sicherungVersion(), erstellt: new Date().toISOString(), daten: daten };
+}
+
+function sicherungZaehlen(sicherung) {
+  const z = {};
+  SICHERUNG_SPEICHER.forEach(function (sp) {
+    const liste = (sicherung.daten && sicherung.daten[sp[0]]) || [];
+    z[sp[0]] = liste.filter(function (r) { return !r.geloescht; }).length;
+  });
+  return z;
+}
+
+// Prüft eine eingelesene Sicherung; wirft einen Fehler mit verständlichem Text.
+function sicherungPruefen(obj) {
+  if (!obj || typeof obj !== "object" || obj.format !== "essensplan-sicherung" || !obj.daten || typeof obj.daten !== "object") {
+    throw new Error("Das ist keine Sicherungsdatei dieser App.");
+  }
+  if (typeof obj.formatVersion !== "number" || obj.formatVersion > 1) {
+    throw new Error("Die Sicherung stammt aus einer neueren App-Version. Bitte öffne die App neu und versuche es noch einmal.");
+  }
+  SICHERUNG_SPEICHER.forEach(function (sp) {
+    const liste = obj.daten[sp[0]];
+    if (liste === undefined) return;
+    if (!Array.isArray(liste)) throw new Error("Die Sicherung ist beschädigt (" + sp[2] + ").");
+    liste.forEach(function (r) {
+      if (!r || typeof r !== "object" || r[sp[1]] === undefined || r[sp[1]] === null) throw new Error("Die Sicherung ist beschädigt (" + sp[2] + ").");
+    });
+  });
+  return obj;
+}
+
+// Führt eine Sicherung mit dem aktuellen Stand zusammen. Es wird nie etwas gelöscht:
+// - fehlt ein Eintrag hier, kommt er dazu (auch ein inzwischen gelöschtes Rezept kommt zurück)
+// - ist der Eintrag in der Sicherung neuer, wird er übernommen
+// - ist er hier neuer oder gleich, bleibt der aktuelle Stand
+async function sicherungAnwenden(sicherung) {
+  const jetzt = Date.now();
+  const schreibe = {};
+  const bericht = {};
+  for (const sp of SICHERUNG_SPEICHER) {
+    const name = sp[0], schluessel = sp[1];
+    const liste = (sicherung.daten && sicherung.daten[name]) || [];
+    const lokal = new Map((await alleLesen(name)).map(function (r) { return [r[schluessel], r]; }));
+    const neu = [];
+    let ergaenzt = 0, zurueck = 0, ersetzt = 0;
+    liste.forEach(function (r) {
+      const hier = lokal.get(r[schluessel]);
+      const kopie = Object.assign({}, r, { dirty: 1 });
+      if (!hier) {
+        if (r.geloescht) return; // Gelöschtes, das es hier nie gab, ist nicht interessant
+        kopie.aktualisiert = Math.max(Number(r.aktualisiert) || 0, jetzt);
+        neu.push(kopie); ergaenzt++;
+      } else if (hier.geloescht && !r.geloescht) {
+        kopie.aktualisiert = zeitNach(hier);
+        neu.push(kopie); zurueck++;
+      } else if ((Number(r.aktualisiert) || 0) > (Number(hier.aktualisiert) || 0)) {
+        neu.push(kopie); ersetzt++;
+      }
+    });
+    schreibe[name] = neu;
+    bericht[name] = { ergaenzt: ergaenzt, zurueck: zurueck, ersetzt: ersetzt };
+  }
+  const namen = SICHERUNG_SPEICHER.map(function (sp) { return sp[0]; });
+  await transaktion(namen, function (st) {
+    namen.forEach(function (n) { schreibe[n].forEach(function (r) { st[n].put(r); }); });
+  });
+  await alleNeuLaden();
+  syncAnstossen();
+  return bericht;
+}
+
+async function sicherungSpeichern() {
+  const sicherung = await sicherungErzeugen();
+  const text = JSON.stringify(sicherung);
+  const datum = new Date().toISOString().slice(0, 10);
+  const dateiname = "essensplan-sicherung-" + datum + ".json";
+  const datei = new File([text], dateiname, { type: "application/json" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [datei] })) {
+      await navigator.share({ files: [datei], title: "Essensplan Sicherung" });
+    } else {
+      const url = URL.createObjectURL(datei);
+      const a = el("a", { href: url, download: dateiname });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+    }
+  } catch (fehler) {
+    if (fehler && fehler.name === "AbortError") return false; // abgebrochen
+    throw fehler;
+  }
+  merkenSchreiben("letzteSicherung", Date.now());
+  return true;
+}
+
+function sicherungDatumText() {
+  const t = Number(merkenLesen("letzteSicherung")) || 0;
+  if (!t) return "Noch nie gesichert.";
+  const tage = Math.floor((Date.now() - t) / 86400000);
+  const d = new Date(t);
+  const text = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return "Letzte Sicherung: " + text + (tage === 0 ? " (heute)" : tage === 1 ? " (gestern)" : " (vor " + tage + " Tagen)");
+}
+
+function sicherungBereichZeichnen(box) {
+  const meldung = el("p", { class: "leise", style: "margin-top: 10px" });
+  const info = el("p", { class: "leise", text: sicherungDatumText() });
+  const datei = el("input", { type: "file", accept: ".json,application/json", hidden: true, id: "sicherung-datei" });
+  const vorschau = el("div", { class: "sicherung-vorschau" });
+  function melden(text, fehler) { meldung.textContent = text; meldung.className = fehler ? "fehler" : "leise"; meldung.style.marginTop = "10px"; }
+  datei.addEventListener("change", async function () {
+    const f = datei.files && datei.files[0];
+    datei.value = "";
+    vorschau.replaceChildren();
+    if (!f) return;
+    try {
+      const obj = sicherungPruefen(JSON.parse(await f.text()));
+      const z = sicherungZaehlen(obj);
+      const wann = obj.erstellt ? new Date(obj.erstellt).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" }) : "unbekannt";
+      melden("", false);
+      vorschau.append(
+        el("div", { class: "karte sicherung-karte" },
+          el("b", { text: "Sicherung vom " + wann }),
+          el("p", { class: "leise", text: "Rezepte: " + z.gerichte + " · Wochenpläne: " + z.wochenplan + " · Vorrat: " + z.vorrat + " · Eigene Abteilungen: " + z.abteilungsliste }),
+          el("p", { class: "leise hinweis-klein", text: "Zusammenführen: Fehlende oder gelöschte Rezepte kommen zurück, neuere Einträge aus der Sicherung werden übernommen. Es wird nichts gelöscht und nichts Neueres überschrieben." }),
+          el("button", {
+            class: "knopf knopf-primaer", type: "button", text: "Jetzt zusammenführen",
+            onclick: async function () {
+              try {
+                const b = await sicherungAnwenden(obj);
+                vorschau.replaceChildren();
+                const neu = b.gerichte.ergaenzt, zur = b.gerichte.zurueck, ers = b.gerichte.ersetzt;
+                melden("Fertig. Rezepte: " + neu + " ergänzt, " + zur + " wiederhergestellt, " + ers + " aktualisiert.", false);
+              } catch (fehler) { melden("Das Wiederherstellen hat nicht geklappt: " + (fehler && fehler.message ? fehler.message : "unbekannter Fehler"), true); }
+            }
+          }),
+          el("button", { class: "textknopf", type: "button", text: "Abbrechen", onclick: function () { vorschau.replaceChildren(); } })
+        )
+      );
+    } catch (fehler) {
+      melden(fehler instanceof SyntaxError ? "Die Datei ist keine gültige Sicherung (kein lesbares JSON)." : fehler.message, true);
+    }
+  });
+  box.replaceChildren(
+    info,
+    el("div", { class: "reihe" },
+      el("button", {
+        class: "knopf knopf-primaer", type: "button", text: "Daten sichern",
+        onclick: async function () {
+          try {
+            const ok = await sicherungSpeichern();
+            if (ok) { info.textContent = sicherungDatumText(); melden("Sicherung erstellt. Speichere sie am besten in iCloud Drive oder „In Dateien sichern“.", false); }
+          } catch (fehler) { melden("Das Sichern hat nicht geklappt: " + (fehler && fehler.message ? fehler.message : "unbekannter Fehler"), true); }
+        }
+      }),
+      el("button", { class: "knopf", type: "button", text: "Wiederherstellen", onclick: function () { datei.click(); } })
+    ),
+    datei, vorschau, meldung
+  );
+}
+
 /* ---------- Symbole für Artikel (Emoji; sonst der Anfangsbuchstabe) ---------- */
 
 const ARTIKEL_SYMBOLE = [
@@ -3792,6 +3973,8 @@ function einstellungenOeffnen() {
   zeichnen();
   const pushBox = el("div");
   pushBereichZeichnen(pushBox);
+  const sicherungBox = el("div");
+  sicherungBereichZeichnen(sicherungBox);
   const nameFeld = el("input", { type: "text", class: "eingabe", id: "mein-name", autocomplete: "off", placeholder: "z. B. Philip", "aria-label": "Dein Name" });
   nameFeld.value = eigenerName();
   nameFeld.addEventListener("input", function () {
@@ -3808,7 +3991,10 @@ function einstellungenOeffnen() {
       nameFeld,
       el("p", { class: "leise", style: "margin-top: 8px", text: "Erscheint bei „neu von …“ in der Einkaufsliste, wenn du einen Artikel hinzufügst." }),
       el("h3", { class: "abschnitt", text: "Mitteilungen" }),
-      pushBox
+      pushBox,
+      el("h3", { class: "abschnitt", text: "Sicherung" }),
+      sicherungBox,
+      el("p", { class: "leise hinweis-klein", text: "Die Sicherung enthält alle Rezepte (mit Fotos), Wochenpläne, Vorrat und Einstellungen der Einkaufsliste." })
     ]
   });
 }
