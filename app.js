@@ -2129,9 +2129,39 @@ function letztesZeichen(text) {
   return teile[teile.length - 1];
 }
 
-const ZUTAT_EMOJIS = ["🍝","🥟","🍕","🍲","🥘","🍜","🍛","🥗","🥙","🌮","🍳","🥞","🧇","🍞","🥐","🍰","🧁","🍪","🥜","🍯","🧀","🥛","🧈","🥚","🥩","🍗","🥓","🐟","🦐","🥦","🥕","🍅","🥔","🧅","🧄","🍄","🌶️","🧂","🫒","🍎","🍌","🍋","🍇","🍫","🍬","🥤","☕","🍷","🧻","🧴"];
+// Alle Essen-, Trink- und Haushalts-Emojis (Apple-Emojis des iPhones) mit deutschen Namen für die Suche.
+const EMOJI_GRUPPEN = [["Obst",[["🍇","trauben"],["🍈","honigmelone"],["🍉","wassermelone"],["🍊","mandarine"],["🍋","zitrone"],["🍌","banane"],["🍍","ananas"],["🥭","mango"],["🍎","roter apfel"],["🍏","grüner apfel"],["🍐","birne"],["🍑","pfirsich"],["🍒","kirschen"],["🍓","erdbeere"],["🫐","blaubeeren"],["🥝","kiwi"],["🍅","tomate tomate"],["🥥","kokosnuss"],["🫒","olive olive öl"]]],["Gemüse & Nüsse",[["🥑","avocado"],["🍆","aubergine"],["🥔","kartoffel kartoffel"],["🥕","karotte"],["🌽","maiskolben"],["🌶️","peperoni chili pfeffer"],["🫑","paprika"],["🥒","gurke"],["🥬","blattgemüse salat kohl"],["🥦","brokkoli brokkoli"],["🧄","knoblauch"],["🧅","zwiebel zwiebel"],["🍄","fliegenpilz"],["🥜","erdnuss nuss erdnuss"],["🫘","bohnen bohnen linsen"],["🌰","kastanie kastanie nuss"],["🫚","ingwer"],["🫛","erbsenschote"]]],["Brot & Süßes",[["🍞","brot brot"],["🥐","croissant croissant"],["🥖","baguette baguette brötchen"],["🫓","fladenbrot"],["🥨","brezel"],["🥯","bagel"],["🥞","pfannkuchen"],["🧇","waffel"],["🍰","torte"],["🎂","geburtstagskuchen"],["🧁","cupcake"],["🥧","kuchen"],["🍪","keks"],["🍩","donut"],["🍫","schokoladentafel schokolade"],["🍬","bonbon"],["🍭","lutscher"],["🍮","pudding"],["🍯","honigtopf honig"]]],["Fleisch, Fisch & Milch",[["🧀","käsestück käse"],["🥚","ei ei eier"],["🍳","spiegelei in bratpfanne"],["🥓","bacon"],["🥩","fleischstück fleisch steak"],["🍗","hähnchenschenkel hähnchen huhn"],["🍖","fleischhachse fleisch"],["🌭","hotdog"],["🦴","knochen"],["🐟","fisch"],["🍤","frittierte garnele"],["🍣","sushi"],["🦐","garnele"],["🦞","hummer"],["🦀","krebs"],["🦑","tintenfisch"],["🦪","auster"],["🥛","glas milch milch"],["🧈","butter butter"]]],["Gerichte",[["🍔","hamburger"],["🍟","pommes frites"],["🍕","pizza pizza"],["🥪","sandwich"],["🥙","döner"],["🧆","falafel"],["🌮","taco"],["🌯","burrito"],["🫔","tamale"],["🥗","salat salat"],["🥘","pfannengericht"],["🫕","fondue"],["🥫","konserve konserve dose"],["🍝","spaghetti nudeln pasta"],["🍜","schüssel und essstäbchen nudelsuppe"],["🍲","topf mit essen suppe eintopf"],["🍛","reis mit curry"],["🍱","bento-box"],["🥟","teigtasche"],["🍙","reisbällchen"],["🍚","reis in schüssel reis"],["🍘","reiscracker"],["🍥","fischfrikadelle"],["🥠","glückskeks"],["🥡","takeaway-schachtel"],["🍢","oden"],["🍡","dango"],["🍧","wassereis eis"],["🍨","eiscreme eis"],["🍦","softeis eis"],["🍿","popcorn"],["🥣","schüssel mit löffel"]]],["Getränke",[["💧","tropfen wasser"],["☕","heißgetränk kaffee"],["🍵","teetasse ohne henkel tee"],["🫖","teekanne"],["🧃","trinkpäckchen saft"],["🥤","becher mit strohhalm limo cola"],["🧋","bubble tea"],["🍶","sake-flasche mit tasse"],["🍺","bierkrug bier"],["🍻","bierkrüge"],["🥂","sektgläser"],["🍷","weinglas wein"],["🥃","trinkglas"],["🍸","cocktailglas"],["🍹","cocktail"],["🍾","flasche mit knallendem korken"],["🧉","mate-tee"],["🧊","eiswürfel"],["🍼","babyflasche"]]],["Gewürze & Geschirr",[["🧂","salz salz"],["🫙","einmachglas"],["🍽️","teller mit messer und gabel"],["🍴","messer und gabel"],["🥄","löffel"],["🔪","küchenmesser"],["🥢","essstäbchen"],["🏺","amphore"]]],["Haushalt & Drogerie",[["🧻","küchenrolle klopapier toilettenpapier küchenrolle"],["🧴","creme shampoo spülmittel creme"],["🧼","seife seife"],["🧽","schwamm"],["🧹","besen"],["🧺","korb wäsche waschmittel"],["🪣","eimer"],["🧯","feuerlöscher"],["🪥","zahnbürste zahnbürste zahnpasta"],["🪒","rasierer"],["🩹","heftpflaster"],["💊","kapsel"],["🔋","batterie batterie"],["💡","glühbirne"],["🕯️","kerze kerze"],["🪴","topfpflanze"],["💐","blumenstrauß blumen"],["🌿","kräuter"],["🌱","spross"],["🛒","einkaufswagen"],["📦","paket"],["🎁","geschenk"],["🎈","luftballon"],["🧸","teddybär"],["🐶","hundegesicht"],["🐱","katzengesicht"],["🐾","tatzenabdrücke tierfutter"]]]];
 
-const ABT_EMOJIS = ["🥦","🍎","🥩","🐟","🥛","🧀","🍞","🥫","🧂","🥤","🍷","🧊","🍦","🍫","🧻","🧴","🧼","🐾","🌿","🍽️","🛒","🏠","💊","🎁"];
+function emojiAuswahlKnoten(waehlen) {
+  const suche = el("input", {
+    type: "search", class: "eingabe emoji-suche", placeholder: "Emoji suchen (z. B. Brot, Käse)", "aria-label": "Emoji suchen",
+    autocomplete: "off", autocapitalize: "off"
+  });
+  const box = el("div", { class: "emoji-auswahl" });
+  function zeichnen() {
+    const q = suche.value.trim().toLowerCase();
+    const teile = [];
+    EMOJI_GRUPPEN.forEach(function (g) {
+      const treffer = q ? g[1].filter(function (i) { return i[1].indexOf(q) >= 0 || i[0] === q; }) : g[1];
+      if (treffer.length === 0) return;
+      teile.push(el("h4", { class: "emoji-gruppe", text: g[0] }));
+      teile.push(el("div", { class: "abt-chips" }, treffer.map(function (i) {
+        return el("button", {
+          class: "abt-chip", type: "button", text: i[0], title: i[1], "data-emoji": i[0], "aria-label": "Symbol " + i[1],
+          onclick: function () { waehlen(i[0]); }
+        });
+      })));
+    });
+    if (teile.length === 0) {
+      teile.push(el("p", { class: "leise hinweis-klein", text: "Nichts gefunden. Die Emoji-Tastatur deines iPhones hat eine eigene Suche: Tippe oben ins Eingabefeld und wähle dort ein Emoji." }));
+    }
+    box.replaceChildren.apply(box, teile);
+  }
+  suche.addEventListener("input", zeichnen);
+  zeichnen();
+  return el("div", { class: "emoji-wahl" }, suche, box);
+}
+
 
 async function abteilungListeSpeichern(eintraege) {
   eintraege.forEach(function (r) { abteilungsListeRoh.set(r.id, r); });
@@ -2187,11 +2217,7 @@ function abteilungenVerwalten(zurueck) {
   const neuEmojiFeld = el("input", { type: "text", class: "eingabe abt-emoji-feld", value: neuEmoji, "aria-label": "Emoji", autocomplete: "off" });
   neuEmojiFeld.addEventListener("input", function () { neuEmoji = emojiNehmen(neuEmojiFeld.value) || "🛒"; });
   function emojiNehmen(text) { return letztesZeichen(text); }
-  function chips(waehlen) {
-    return el("div", { class: "abt-chips" }, ABT_EMOJIS.map(function (e) {
-      return el("button", { class: "abt-chip", type: "button", text: e, "aria-label": "Emoji " + e, onclick: function () { waehlen(e); } });
-    }));
-  }
+  function chips(waehlen) { return emojiAuswahlKnoten(waehlen); }
   function zeichnen() {
     const liste = abteilungsListe();
     const bewegbar = liste.filter(function (a) { return !a.fest; });
@@ -2284,11 +2310,8 @@ function abteilungOeffnen(name, entfernen) {
         if (e) symbolSetzen(name, e).then(symbolZeichnen);
       });
       teile.push(el("div", { class: "abt-editor sym-editor" },
-        el("p", { class: "leise hinweis-klein", text: "Tippe ein Emoji ein oder wähle eins aus:" }), feld,
-        el("div", { class: "abt-chips" }, ZUTAT_EMOJIS.map(function (e) {
-          return el("button", { class: "abt-chip", type: "button", text: e, "aria-label": "Symbol " + e,
-            onclick: function () { symbolSetzen(name, e).then(symbolZeichnen); } });
-        })),
+        el("p", { class: "leise hinweis-klein", text: "Tippe ein beliebiges Emoji ein (iPhone-Emoji-Tastatur) oder suche und wähle unten eins aus:" }), feld,
+        emojiAuswahlKnoten(function (e) { symbolSetzen(name, e).then(symbolZeichnen); }),
         hat ? el("button", { class: "knopf sym-reset", type: "button", text: "Zurücksetzen (automatisch)", onclick: function () { symbolSetzen(name, "").then(symbolZeichnen); } }) : null));
     }
     symbolBox.replaceChildren.apply(symbolBox, teile);

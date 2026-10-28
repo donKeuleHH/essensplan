@@ -970,3 +970,7 @@ body, button, input, select, textarea {
 .sym-kopf .symbol { font-size: 1.6rem; }
 .sym-editor { margin: 8px 0 0; }
 .sym-reset { width: 100%; margin-top: 10px; }
+
+.emoji-suche { width: 100%; margin: 6px 0 4px; }
+.emoji-auswahl { max-height: 46vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.emoji-gruppe { margin: 14px 2px 2px; font-size: 0.72rem; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-leise); }
