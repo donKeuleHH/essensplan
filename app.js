@@ -2794,7 +2794,6 @@ function einkaufZeichnen() {
   const offen = alle.filter(function (x) { return !x.erledigt; });
   const erledigt = alle.filter(function (x) { return x.erledigt; });
 
-  const hatteFokus = extraOffen && document.activeElement && document.activeElement.id === "extra-name";
   const kopfIcons = [
     { beschriftung: "Abteilungen", knoten: abteilungenIconKnoten(), aktion: function () { abteilungenVerwalten(null); } },
     { beschriftung: "Vorrat", knoten: vorratIconKnoten(), aktion: vorratOeffnen }
@@ -2810,7 +2809,6 @@ function einkaufZeichnen() {
     });
   }
   const teile = wochenKopf(kopfIcons);
-  teile.push(extraEingabe(woche));
 
   function zeile(x) {
     return x.quelle === "rezept" ? postenZeile(x.p, x.erledigt, montag) : extraZeile(x.e);
@@ -2854,10 +2852,7 @@ function einkaufZeichnen() {
   }
   zuletztVerwendet(woche).forEach(function (n) { teile.push(n); });
   box.replaceChildren.apply(box, teile);
-  if (hatteFokus) {
-    const feld = document.getElementById("extra-name");
-    if (feld) { feld.focus(); try { feld.setSelectionRange(feld.value.length, feld.value.length); } catch (x) { /* egal */ } }
-  }
+  if (suchen && !suchen.hidden) suchenZeichnen();
 }
 
 // "2", "2 x", "2 Tuben", "1,5 l" -> { zahl, einheit }; Text ohne führende Zahl -> null
@@ -2879,62 +2874,246 @@ function extraMengenSummieren(alt, neu) {
 }
 
 const EXTRA_EINHEITEN = ["Stück", "g", "kg", "ml", "l", "Packung", "Dose", "Glas", "Flasche", "Beutel", "Bund"];
-let extraOffen = false; // Eingabe unter "Artikel hinzufügen" aufgeklappt?
 
-// Eingabezeile für eigene Artikel (Name, optionale Menge) mit Vorschlägen aus früheren Einträgen.
-function extraEingabe(woche) {
-  const name = el("input", {
-    type: "text", id: "extra-name", class: "eingabe", list: "extravorschlaege", autocomplete: "off",
-    autocapitalize: "sentences", placeholder: "Artikel hinzufügen", "aria-label": "Artikel", value: extraEntwurf.name
+/* ---------- Schnelleingabe: Suchleiste, Kachel-Vorschläge, Menge abfragen ---------- */
+
+let suchSchritt = null; // null = Kachelliste, sonst Name des Artikels, dessen Menge gerade abgefragt wird
+let suchen = null;      // Overlay (wird beim ersten Öffnen gebaut)
+
+// Alle bekannten Artikelnamen: eigene Artikel, Vorrat, Rezeptzutaten, gemerkte Abteilungen, zuletzt gängige Begriffe.
+function suchNamenPool() {
+  const karte = new Map();
+  function dazu(name, prio) {
+    const n = String(name || "").trim();
+    if (!n) return;
+    const k = n.toLowerCase(), alt = karte.get(k);
+    if (!alt || prio < alt.prio) karte.set(k, { name: n, prio: prio });
+  }
+  extras.forEach(function (e) { dazu(e.name, 0); });
+  gerichte.forEach(function (g) { (g.zutaten || []).forEach(function (z) { dazu(z.name, 0); }); });
+  vorratAktiv().forEach(function (v) { dazu(v.name, 1); });
+  abteilungsWahl.forEach(function (w) { if (!w.geloescht) dazu(w.name, 1); });
+  ARTIKEL_SYMBOL_INDEX.forEach(function (k) {
+    if (k[0].length >= 4) dazu(k[0].charAt(0).toUpperCase() + k[0].slice(1), 3);
   });
+  return Array.from(karte.values());
+}
+
+function suchTreffer(text) {
+  const s = text.trim().toLowerCase();
+  if (!s) return [];
+  const treffer = [];
+  suchNamenPool().forEach(function (p) {
+    const n = p.name.toLowerCase();
+    let rang;
+    if (n.startsWith(s)) rang = 0;
+    else if (n.split(/[\s\-\/]+/).some(function (w) { return w.startsWith(s); })) rang = 1;
+    else if (n.indexOf(s) >= 0) rang = 2;
+    else return;
+    treffer.push({ name: p.name, rang: rang, prio: p.prio });
+  });
+  treffer.sort(function (a, b) {
+    return a.rang - b.rang || a.prio - b.prio || a.name.length - b.name.length || a.name.localeCompare(b.name, "de");
+  });
+  return treffer.slice(0, 15).map(function (t) { return t.name; });
+}
+
+function suchAufListe() {
+  const woche = datumSchluessel(angezeigteWoche);
+  const namen = new Set();
+  const vorratNamen = vorratNamenSet();
+  einkaufslisteBerechnen(angezeigteWoche).posten.forEach(function (p) {
+    const k = p.name.trim().toLowerCase();
+    if (!vorratNamen.has(k)) namen.add(k);
+  });
+  extrasFuer(woche).forEach(function (e) { if (!e.erledigt) namen.add(e.name.trim().toLowerCase()); });
+  return namen;
+}
+
+function suchZuletzt() {
+  const woche = datumSchluessel(angezeigteWoche);
+  const aktiv = new Set(extrasFuer(woche).map(function (e) { return e.name.toLowerCase(); }));
+  return Array.from(extraVorschlaege().values()).filter(function (e) { return !aktiv.has(e.name.toLowerCase()); })
+    .sort(function (a, b) { return b.aktualisiert - a.aktualisiert; }).slice(0, 12).map(function (e) { return e.name; });
+}
+
+function suchenBauen() {
+  const feld = el("input", {
+    type: "text", id: "such-name", class: "such-eingabe", autocomplete: "off", autocapitalize: "sentences",
+    enterkeyhint: "done", placeholder: "Ich brauche …", "aria-label": "Artikel suchen oder hinzufügen"
+  });
+  const loeschen = el("button", { class: "such-loeschen", type: "button", "aria-label": "Eingabe löschen", text: "✕", hidden: true });
+  const leiste = el("form", { class: "such-leiste", id: "such-leiste" },
+    el("div", { class: "such-feld" }, el("span", { "aria-hidden": "true", text: "🔍" }), feld, loeschen),
+    el("button", { class: "such-abbruch", type: "button", text: "Abbrechen", onclick: suchenSchliessen })
+  );
+  const inhalt = el("div", { class: "such-inhalt", id: "such-inhalt" });
+  suchen = el("div", { class: "such", id: "such", hidden: true },
+    el("div", { class: "such-dunkel", onclick: suchenSchliessen }),
+    el("div", { class: "such-blatt" }, el("div", { class: "such-griff" }), inhalt),
+    leiste
+  );
+  document.body.append(suchen);
+  feld.addEventListener("input", function () {
+    loeschen.hidden = feld.value === "";
+    suchenZeichnen();
+  });
+  loeschen.addEventListener("click", function () { feld.value = ""; loeschen.hidden = true; suchenZeichnen(); feld.focus(); });
+  leiste.addEventListener("submit", function (e) {
+    e.preventDefault();
+    const text = feld.value.trim();
+    if (text) suchSchrittStarten(text.charAt(0).toUpperCase() + text.slice(1));
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", suchenAnpassen);
+    window.visualViewport.addEventListener("scroll", suchenAnpassen);
+  }
+}
+
+// Das Overlay füllt genau den sichtbaren Bereich (über der Tastatur).
+function suchenAnpassen() {
+  if (!suchen || suchen.hidden) return;
+  const vv = window.visualViewport;
+  if (vv) {
+    suchen.style.top = vv.offsetTop + "px";
+    suchen.style.height = vv.height + "px";
+    suchen.classList.toggle("mit-tastatur", window.innerHeight - vv.height > 120);
+  }
+}
+
+function suchenOeffnen() {
+  if (!suchen) suchenBauen();
+  suchSchritt = null;
+  suchen.hidden = false;
+  suchenAnpassen();
+  suchenZeichnen();
+  // Fokus im selben Fingertipp, sonst öffnet iOS die Tastatur nicht.
+  document.getElementById("such-name").focus();
+  setTimeout(suchenAnpassen, 300);
+}
+
+function suchenSchliessen() {
+  if (!suchen) return;
+  suchen.hidden = true;
+  suchSchritt = null;
+  const feld = document.getElementById("such-name");
+  feld.value = "";
+  document.getElementById("such-leiste").querySelector(".such-loeschen").hidden = true;
+  feld.blur();
+}
+
+function suchKachel(name, aufListe) {
+  return el("button", {
+    class: "such-kachel" + (aufListe ? " drauf" : ""), type: "button",
+    onclick: function () { suchSchrittStarten(name); }
+  },
+    aufListe ? el("span", { class: "such-haken", text: "✓ drauf" }) : null,
+    symbolKnoten(name),
+    el("span", { class: "such-name", text: name })
+  );
+}
+
+function suchenZeichnen() {
+  if (!suchen) return;
+  const inhalt = document.getElementById("such-inhalt");
+  const leiste = document.getElementById("such-leiste");
+  const feld = document.getElementById("such-name");
+  if (suchSchritt !== null) {
+    leiste.hidden = true;
+    return; // der Mengen-Schritt zeichnet sich selbst
+  }
+  leiste.hidden = false;
+  const text = feld.value.trim();
+  const drauf = suchAufListe();
+  const teile = [];
+  if (!text) {
+    const zuletzt = suchZuletzt();
+    if (zuletzt.length === 0) {
+      teile.push(el("p", { class: "leise such-hinweis", text: "Tippe ein, was du brauchst. Die Vorschläge erscheinen schon nach den ersten Buchstaben." }));
+    } else {
+      teile.push(el("div", { class: "such-titel", text: "Zuletzt verwendet" }));
+      teile.push(el("div", { class: "such-raster" }, zuletzt.map(function (n) { return suchKachel(n, drauf.has(n.toLowerCase())); })));
+    }
+  } else {
+    const treffer = suchTreffer(text);
+    const kacheln = treffer.map(function (n) { return suchKachel(n, drauf.has(n.toLowerCase())); });
+    if (!treffer.some(function (n) { return n.toLowerCase() === text.toLowerCase(); })) {
+      const neuName = text.charAt(0).toUpperCase() + text.slice(1);
+      kacheln.push(el("button", { class: "such-kachel neu", type: "button", onclick: function () { suchSchrittStarten(neuName); } },
+        symbolKnoten(neuName),
+        el("span", { class: "such-name", text: "„" + neuName + "“ neu anlegen" })
+      ));
+    }
+    teile.push(el("div", { class: "such-raster" }, kacheln));
+  }
+  inhalt.replaceChildren.apply(inhalt, teile);
+}
+
+// Zweiter Schritt: Menge (und bei Bedarf Abteilung) für den gewählten Artikel.
+function suchSchrittStarten(name) {
+  suchSchritt = name;
+  const woche = datumSchluessel(angezeigteWoche);
+  // Letzte Menge dieses Artikels als Vorschlag
+  let zahl = "", einheitWahl = EXTRA_EINHEITEN.indexOf(extraEntwurf.einheit) >= 0 ? extraEntwurf.einheit : "Stück";
+  const frueher = extraVorschlaege().get(name.toLowerCase());
+  const gelesen = frueher && frueher.menge ? extraMengeLesen(frueher.menge) : null;
+  if (gelesen) {
+    zahl = zahlText(gelesen.zahl);
+    if (EXTRA_EINHEITEN.indexOf(gelesen.einheit) >= 0) einheitWahl = gelesen.einheit;
+    else if (!gelesen.einheit) einheitWahl = "Stück";
+  }
   const menge = el("input", {
-    type: "text", id: "extra-menge", class: "eingabe extra-menge", autocomplete: "off", inputmode: "decimal",
-    placeholder: "Menge", "aria-label": "Menge (optional)", value: extraEntwurf.menge
+    type: "text", id: "extra-menge", class: "eingabe", autocomplete: "off", inputmode: "decimal",
+    placeholder: "Menge (optional)", "aria-label": "Menge", value: zahl
   });
   const einheit = el("select", { id: "extra-einheit", class: "eingabe extra-einheit", "aria-label": "Einheit" },
     EXTRA_EINHEITEN.map(function (e) { return el("option", { value: e, text: e }); }));
-  einheit.value = EXTRA_EINHEITEN.indexOf(extraEntwurf.einheit) >= 0 ? extraEntwurf.einheit : "Stück";
-  // Abteilung: schlägt beim Tippen die bekannte/automatische Abteilung vor; eine eigene Wahl bleibt bestehen.
+  einheit.value = einheitWahl;
   const abtWahl = el("select", { id: "extra-abt", class: "eingabe extra-abt", "aria-label": "Abteilung" },
-    [el("option", { value: "", text: "Abteilung: automatisch" })].concat(abteilungsListe().map(function (a) {
-      return el("option", { value: a.id, text: a.emoji + " " + a.name });
-    })));
-  function abtVorschlagen() {
-    if (extraEntwurf.abt) { abtWahl.value = extraEntwurf.abt; return; }
-    abtWahl.value = name.value.trim() ? abteilungFuer(name.value) : "";
-  }
-  abtVorschlagen();
-  abtWahl.addEventListener("change", function () { extraEntwurf.abt = abtWahl.value; });
-  name.addEventListener("input", function () { extraEntwurf.name = name.value; abtVorschlagen(); });
-  menge.addEventListener("input", function () { extraEntwurf.menge = menge.value; });
-  einheit.addEventListener("change", function () { extraEntwurf.einheit = einheit.value; });
-  const formular = el("form", {
-    class: "extra-form",
-    hidden: !extraOffen,
+    abteilungsListe().map(function (a) { return el("option", { value: a.id, text: a.emoji + " " + a.name }); }));
+  abtWahl.value = abteilungFuer(name);
+  const form = el("form", {
+    class: "such-schritt",
     onsubmit: function (e) {
       e.preventDefault();
-      // Ohne Zahl keine Einheit; sonst "2 Dose" (so wird es auch gespeichert und summiert).
-      const zahl = menge.value.trim();
-      extraHinzufuegen(woche, name.value, zahl ? zahl + " " + einheit.value : "", abtWahl.value);
+      const z = menge.value.trim();
+      const text = z ? z + " " + einheit.value : "";
+      if (einheit.value) extraEntwurf.einheit = einheit.value;
+      // Zurück zur Kachelliste (Blatt bleibt offen, Tastatur bleibt oben), dann speichern.
+      suchSchritt = null;
+      const feld = document.getElementById("such-name");
+      feld.value = "";
+      document.getElementById("such-leiste").querySelector(".such-loeschen").hidden = true;
+      suchenZeichnen();
+      feld.focus();
+      extraHinzufuegen(woche, name, text, abtWahl.value);
     }
   },
-    name, abtWahl, menge, einheit,
-    el("button", { class: "knopf knopf-primaer extra-plus", type: "submit", "aria-label": "Zur Liste hinzufügen", text: "+" })
+    el("div", { class: "such-schritt-kopf" }, symbolKnoten(name), el("b", { id: "such-schritt-name", text: name })),
+    el("div", { class: "such-schritt-reihe" }, menge, einheit),
+    abtWahl,
+    el("div", { class: "such-schritt-knoepfe" },
+      el("button", {
+        class: "knopf knopf-sekundaer", type: "button", text: "Zurück",
+        onclick: function () {
+          suchSchritt = null;
+          suchenZeichnen();
+          document.getElementById("such-name").focus();
+        }
+      }),
+      el("button", { class: "knopf knopf-primaer such-ok", type: "submit", text: "Hinzufügen" })
+    )
   );
-  const kopf = el("button", { class: "import-kopf", type: "button", "aria-expanded": extraOffen ? "true" : "false" },
-    el("span", { class: "import-titel", text: "+ Artikel hinzufügen" }),
-    el("span", { class: "import-pfeil", text: "›" })
-  );
-  const huelle = el("div", { class: "karte import-karte extra-karte" + (extraOffen ? " offen" : "") }, kopf, formular);
-  kopf.addEventListener("click", function () {
-    extraOffen = !extraOffen;
-    formular.hidden = !extraOffen;
-    huelle.classList.toggle("offen", extraOffen);
-    kopf.setAttribute("aria-expanded", extraOffen ? "true" : "false");
-    if (extraOffen) name.focus();
-  });
-  return huelle;
+  const inhalt = document.getElementById("such-inhalt");
+  inhalt.replaceChildren(form);
+  document.getElementById("such-leiste").hidden = true;
+  menge.focus();
+  try { menge.select(); } catch (x) { /* egal */ }
 }
+
+document.addEventListener("click", function (e) {
+  if (e.target.closest && e.target.closest(".such-start")) suchenOeffnen();
+});
 
 function extraZeile(e) {
   const neu = extraIstNeu(e);
