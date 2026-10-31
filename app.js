@@ -1445,6 +1445,8 @@ function wochenplanZeichnen() {
     // nur das Sport-Zeichen wird an Ort und Stelle angepasst.
     const vorhanden = Array.prototype.find.call(box.children, function (k) { return k.dataset && k.dataset.sig === sig; });
     if (vorhanden) {
+      const pz = vorhanden.querySelector(".wk-pz");
+      if (pz && g) portionenAnzeigen(pz, i, g);
       sportZeichenSetzen(vorhanden, istSport, i);
       loeschZeichenSetzen(vorhanden, i);
       teile.push(vorhanden);
@@ -1481,7 +1483,111 @@ function wochenplanZeichnen() {
       el("span", { text: "Sporttage antippen" }),
       el("button", { type: "button", onclick: function () { sportModusUmschalten(); }, text: "Fertig" })));
   }
+  box.classList.toggle("wk-modus", !!(sportModus || loeschModus));
   box.replaceChildren.apply(box, teile);
+}
+
+/* ---------- Personenzahl und Entfernen direkt an der Kachel ---------- */
+
+function portionenSchalter(index, g) {
+  function knopf(zeichen, beschriftung, delta) {
+    return el("span", {
+      class: "wk-pz-knopf", role: "button", tabindex: "0", "aria-label": beschriftung, text: zeichen,
+      onclick: function (e) { e.stopPropagation(); portionenAendern(index, delta); }
+    });
+  }
+  const huelle = el("span", { class: "wk-pz", "data-tag": String(index) },
+    knopf("−", "Eine Portion weniger", -1),
+    el("span", { class: "wk-pz-zahl", "aria-live": "polite" }),
+    knopf("+", "Eine Portion mehr", 1)
+  );
+  portionenAnzeigen(huelle, index, g);
+  return huelle;
+}
+
+function portionenAnzeigen(huelle, index, g) {
+  const plan = plaene.get(datumSchluessel(angezeigteWoche));
+  const n = tagPortionen(plan, index, g);
+  huelle.querySelector(".wk-pz-zahl").textContent = zahlText(n);
+  huelle.classList.toggle("ang", n !== g.portionen);
+  huelle.title = n !== g.portionen ? "Rezept: " + zahlText(g.portionen) + " Portionen" : "";
+}
+
+function portionenAendern(index, delta) {
+  const woche = datumSchluessel(angezeigteWoche);
+  if (pendingWoche !== null && pendingWoche !== woche && pendingPortionen.size > 0) portionenSpeichern();
+  pendingWoche = woche;
+  const plan = plaene.get(woche);
+  const id = plan ? plan.tage[index] : null;
+  const g = id ? gerichte.find(function (x) { return x.id === id; }) : null;
+  if (!g) return;
+  const aktuell = tagPortionen(plan, index, g);
+  const neu = Math.min(99, Math.max(1, aktuell + delta));
+  if (neu === aktuell) return;
+  pendingPortionen.set(index, neu);
+  const huelle = document.querySelector('#wochenplan .wk-pz[data-tag="' + index + '"]');
+  if (huelle) portionenAnzeigen(huelle, index, g);
+  clearTimeout(pendingTimer);
+  pendingTimer = setTimeout(portionenSpeichern, 500);
+}
+
+async function portionenSpeichern() {
+  clearTimeout(pendingTimer);
+  pendingTimer = null;
+  if (pendingPortionen.size === 0) return;
+  const woche = pendingWoche;
+  const aenderungen = new Map(pendingPortionen);
+  const alt = plaene.get(woche);
+  if (!alt) { pendingPortionen.clear(); return; }
+  const plan = {
+    woche: woche, tage: alt.tage.slice(), sport: sportTage(alt), personen: personenTage(alt),
+    aktualisiert: zeitNach(alt), dirty: 1
+  };
+  aenderungen.forEach(function (n, i) {
+    const g = gerichte.find(function (x) { return x.id === plan.tage[i]; });
+    plan.personen[i] = g && n === g.portionen ? null : n;
+  });
+  try {
+    await schreiben("wochenplan", function (st) { return st.put(plan); });
+    await plaeneNeuLaden();
+    syncAnstossen();
+  } catch (fehler) {
+    alert("Das Speichern hat leider nicht geklappt.");
+  } finally {
+    aenderungen.forEach(function (n, i) { if (pendingPortionen.get(i) === n) pendingPortionen.delete(i); });
+    if (pendingPortionen.size === 0) wochenplanZeichnen();
+  }
+}
+
+function tagEntfernenKnopf(index, g) {
+  return el("span", {
+    class: "wk-weg", role: "button", tabindex: "0", "aria-label": g.titel + " aus dem Plan entfernen", title: "Entfernen",
+    onclick: function (e) {
+      e.stopPropagation();
+      if (!confirm("„" + g.titel + "“ aus dem Plan entfernen?")) return;
+      tagEntfernen(index);
+    }
+  }, loeschIconKnoten());
+}
+
+async function tagEntfernen(index) {
+  const schluessel = datumSchluessel(angezeigteWoche);
+  const alt = plaene.get(schluessel);
+  if (!alt) return;
+  pendingPortionen.delete(index);
+  const plan = {
+    woche: schluessel, tage: alt.tage.slice(), sport: sportTage(alt), personen: personenTage(alt),
+    aktualisiert: zeitNach(alt), dirty: 1
+  };
+  plan.tage[index] = null;
+  plan.personen[index] = null;
+  try {
+    await schreiben("wochenplan", function (st) { return st.put(plan); });
+    await plaeneNeuLaden();
+    syncAnstossen();
+  } catch (fehler) {
+    alert("Das Speichern hat leider nicht geklappt.");
+  }
 }
 
 const RUECK_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg>';
@@ -1502,8 +1608,7 @@ function tagKarte(index, tag, g, istHeute, istSport, auswaerts) {
   if (auswaerts) {
     text = [el("h3", { text: "Auswärts essen" }), el("p", { text: "Kein Gericht geplant" })];
   } else if (g) {
-    const kcal = g.naehrwerte && g.naehrwerte.kcal !== null && g.naehrwerte.kcal !== undefined ? " · " + zahlText(g.naehrwerte.kcal) + " kcal" : "";
-    text = [el("h3", { text: g.titel }), el("p", { text: zahlText(g.portionen) + " Port." + kcal })];
+    text = [el("h3", { text: g.titel }), el("p", { class: "wk-reihe" }, portionenSchalter(index, g), tagEntfernenKnopf(index, g))];
   } else {
     text = [el("h3", { class: "wk-offen", text: "Gericht wählen" })];
   }
@@ -1681,6 +1786,19 @@ function gerichtWaehlen(index, aktuelleId) {
 }
 
 // Welche Tage der Woche Sporttage sind (immer eine Liste mit 5 Einträgen, wahr oder falsch).
+// Personenzahl pro Tag (nur gesetzt, wenn sie vom Rezept abweicht); null = Rezeptangabe.
+function personenTage(plan) {
+  const liste = plan && Array.isArray(plan.personen) ? plan.personen : [];
+  return [0, 1, 2, 3, 4].map(function (i) { const n = Number(liste[i]); return n > 0 ? n : null; });
+}
+function tagPortionen(plan, i, g) {
+  if (pendingPortionen.has(i) && plan && plan.woche === pendingWoche) return pendingPortionen.get(i);
+  return personenTage(plan)[i] || (g ? g.portionen : 0);
+}
+let pendingPortionen = new Map(); // noch nicht gespeicherte Änderungen (Tag -> Zahl)
+let pendingWoche = null;
+let pendingTimer = null;
+
 function sportTage(plan) {
   const liste = plan && Array.isArray(plan.sport) ? plan.sport : [];
   return [0, 1, 2, 3, 4].map(function (i) { return liste[i] === true; });
@@ -1766,10 +1884,11 @@ async function loeschAusfuehren() {
     woche: schluessel,
     tage: alt ? alt.tage.slice() : [null, null, null, null, null],
     sport: sportTage(alt),
+    personen: personenTage(alt),
     aktualisiert: zeitNach(alt),
     dirty: 1
   };
-  tage.forEach(function (i) { plan.tage[i] = null; });
+  tage.forEach(function (i) { plan.tage[i] = null; plan.personen[i] = null; });
   loeschModusBeenden();
   try {
     await schreiben("wochenplan", function (st) { return st.put(plan); });
@@ -1816,6 +1935,7 @@ async function sportSpeichern(montag, sport) {
     woche: schluessel,
     tage: alt ? alt.tage.slice() : [null, null, null, null, null],
     sport: sport.map(function (v) { return !!v; }),
+    personen: personenTage(alt),
     aktualisiert: zeitNach(alt),
     dirty: 1
   };
@@ -1835,9 +1955,11 @@ async function tagSetzen(montag, index, gerichtId) {
     woche: schluessel,
     tage: alt ? alt.tage.slice() : [null, null, null, null, null],
     sport: sportTage(alt),
+    personen: personenTage(alt),
     aktualisiert: zeitNach(alt),
     dirty: 1
   };
+  if (plan.tage[index] !== gerichtId) plan.personen[index] = null;
   plan.tage[index] = gerichtId;
   try {
     await schreiben("wochenplan", function (s) { return s.put(plan); });
@@ -2586,10 +2708,11 @@ function einkaufslisteBerechnen(montag) {
   const posten = new Map();
   let anzahlGerichte = 0;
 
-  (plan ? plan.tage : []).forEach(function (id) {
+  (plan ? plan.tage : []).forEach(function (id, tagIndex) {
     const g = id === null || id === undefined ? null : gerichte.find(function (x) { return x.id === id; });
     if (!g) return;
     anzahlGerichte++;
+    const faktor = g.portionen > 0 ? tagPortionen(plan, tagIndex, g) / g.portionen : 1;
     g.zutaten.forEach(function (z) {
       const name = z.name.trim();
       const hatMenge = z.menge !== null && z.menge !== undefined;
@@ -2597,7 +2720,7 @@ function einkaufslisteBerechnen(montag) {
       const gruppe = hatMenge ? (umrechnung ? umrechnung[0] : z.einheit) : "";
       const schluessel = name.toLowerCase() + "|" + gruppe;
       if (!posten.has(schluessel)) posten.set(schluessel, { schluessel: schluessel, name: name, gruppe: gruppe, summe: 0 });
-      if (hatMenge) posten.get(schluessel).summe += z.menge * (umrechnung ? umrechnung[1] : 1);
+      if (hatMenge) posten.get(schluessel).summe += z.menge * faktor * (umrechnung ? umrechnung[1] : 1);
     });
   });
 
@@ -3684,8 +3807,8 @@ const SYNC_TABELLEN = [
     neuLaden: function () { return plaeneNeuLaden(); },
     schluesselLokal: function (r) { return r.woche; },
     schluesselServer: function (z) { return z.woche; },
-    zuServer: function (p) { return { woche: p.woche, tage: p.tage, sport: sportTage(p), aktualisiert: p.aktualisiert }; },
-    vonServer: function (z) { return { woche: z.woche, tage: z.tage, sport: sportTage(z), aktualisiert: z.aktualisiert }; }
+    zuServer: function (p) { return { woche: p.woche, tage: p.tage, sport: sportTage(p), personen: personenTage(p), aktualisiert: p.aktualisiert }; },
+    vonServer: function (z) { return { woche: z.woche, tage: z.tage, sport: sportTage(z), personen: personenTage(z), aktualisiert: z.aktualisiert }; }
   },
   {
     name: "einkauf_haken", speicher: "haken", konflikt: "woche,posten", block: 50,

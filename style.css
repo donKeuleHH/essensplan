@@ -1024,3 +1024,15 @@ body:has(#einkauf.aktiv) .such-start { display: flex; }
 .such-schritt-reihe { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .such-schritt .eingabe { min-width: 0; }
 .such-schritt-knoepfe { display: grid; grid-template-columns: 1fr 1.6fr; gap: 10px; margin-top: 4px; }
+
+/* Personenzahl und Papierkorb an der Wochenplan-Kachel */
+.wk-text .wk-reihe { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; }
+.wk-pz { flex: none; display: inline-flex; align-items: center; padding: 2px; background: var(--bg-tief); border-radius: 999px; box-shadow: var(--eingesenkt); }
+.wk-pz-knopf { width: 28px; height: 28px; display: grid; place-items: center; font-size: 1.05rem; font-weight: 600; line-height: 1; color: var(--akzent); background: var(--karte-hell); border-radius: 50%; cursor: pointer; user-select: none; -webkit-user-select: none; }
+.wk-pz-knopf:active { opacity: 0.7; }
+.wk-pz-zahl { min-width: 24px; padding: 0 3px; text-align: center; font-size: 0.92rem; font-weight: 700; color: var(--text); }
+.wk-pz.ang .wk-pz-zahl { color: var(--akzent); }
+.wk-weg { flex: none; width: 34px; height: 34px; display: grid; place-items: center; color: var(--text-leise); background: var(--karte-hell); border-radius: 50%; cursor: pointer; }
+.wk-weg svg { width: 17px; height: 17px; }
+.wk-weg:active { opacity: 0.7; }
+.wk-modus .wk-reihe { display: none; }
