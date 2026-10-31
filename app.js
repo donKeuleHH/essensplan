@@ -542,15 +542,14 @@ function gerichtKachel(g) {
   const bild = g.bild
     ? el("img", { class: "kachel-bild", src: g.bild, alt: "", loading: "lazy" })
     : kreisBild(g.titel, "kachel-bild");
-  const info = [zahlText(g.portionen) + " Port."];
-  if (g.naehrwerte && g.naehrwerte.kcal !== null && g.naehrwerte.kcal !== undefined) info.push(zahlText(g.naehrwerte.kcal) + " kcal");
+  // Die Kachel zeigt nur Bild und Titel (plus Ernährungssymbol); Portionen und kcal stehen in der Listenansicht und im Gericht selbst.
   const symbol = el("span", { class: "kachel-diaet", title: ERN_TEXT[g.ernaehrung] || "" });
   if (DIAET_ICON[g.ernaehrung]) symbol.innerHTML = DIAET_ICON[g.ernaehrung];
   return el("button", { class: "kachel", type: "button", onclick: function () { detailOeffnen(g.id); } },
     bild,
     el("div", { class: "kachel-text" },
       el("h3", { text: g.titel }),
-      el("div", { class: "kachel-fuss" }, el("span", { text: info.join(" · ") }), symbol)
+      DIAET_ICON[g.ernaehrung] ? el("div", { class: "kachel-fuss" }, el("span"), symbol) : null
     )
   );
 }
@@ -4286,9 +4285,14 @@ function kontoKarte() {
 }
 
 function einstellungenOeffnen() {
-  const liste = el("div", { class: "skin-liste" });
+  const liste = el("div", { class: "skin-liste", hidden: true });
+  const skinName = el("b");
+  const skinStreifen = el("span", { class: "skin-streifen", "aria-hidden": "true" });
   function zeichnen() {
     const aktuell = skinLesen();
+    const aktSkin = SKINS.filter(function (x) { return x.id === aktuell; })[0] || SKINS[0];
+    skinName.textContent = aktSkin.name;
+    skinStreifen.replaceChildren.apply(skinStreifen, aktSkin.farben.map(function (f) { return el("span", { style: "background:" + f }); }));
     liste.replaceChildren.apply(liste, SKINS.map(function (skin) {
       return el("button", {
         class: "skin-kachel" + (skin.id === aktuell ? " aktiv" : ""), type: "button", "data-skin": skin.id,
@@ -4300,6 +4304,15 @@ function einstellungenOeffnen() {
     }));
   }
   zeichnen();
+  const skinZeile = el("button", { class: "skin-zeile", type: "button", "aria-expanded": "false", id: "skin-zeile" },
+    skinStreifen,
+    el("span", { class: "konto-text" }, skinName, el("small", { text: "Gilt nur für dieses Gerät" })),
+    el("span", { class: "import-pfeil", "aria-hidden": "true", text: "›" })
+  );
+  skinZeile.addEventListener("click", function () {
+    liste.hidden = !liste.hidden;
+    skinZeile.setAttribute("aria-expanded", liste.hidden ? "false" : "true");
+  });
   const pushBox = el("div");
   pushBereichZeichnen(pushBox);
   const sicherungBox = el("div");
@@ -4315,11 +4328,11 @@ function einstellungenOeffnen() {
     inhalt: [
       kontoKarte(),
       el("h3", { class: "abschnitt", text: "Farbvariante" }),
+      skinZeile,
       liste,
-      el("p", { class: "leise", style: "margin-top: 16px", text: "Die Wahl gilt nur für dieses Gerät." }),
       el("h3", { class: "abschnitt", text: "Dein Name" }),
       nameFeld,
-      el("p", { class: "leise", style: "margin-top: 8px", text: "Erscheint bei „neu von …“ in der Einkaufsliste, wenn du einen Artikel hinzufügst." }),
+      el("p", { class: "leise", style: "margin: 8px 2px 0; font-size: 0.82rem", text: "Erscheint bei „neu von …“ in der Einkaufsliste." }),
       el("h3", { class: "abschnitt", text: "Mitteilungen" }),
       pushBox,
       el("h3", { class: "abschnitt", text: "Sicherung" }),

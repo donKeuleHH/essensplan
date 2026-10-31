@@ -1060,3 +1060,12 @@ body:has(#einkauf.aktiv) .such-start { display: flex; }
 .konto-punkt { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--akzent); }
 .konto-punkt.s-ok { background: #66c28f; }
 .konto-punkt.s-offline, .konto-punkt.s-fehler { background: var(--gefahr); }
+
+/* Einstellungen: Farbvariante als eine Zeile, die sich aufklappen lässt */
+.skin-zeile { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 14px; font: inherit; color: var(--text); text-align: left; background: var(--karte); border: 1px solid var(--linie); border-radius: 18px; box-shadow: var(--erhaben); cursor: pointer; }
+.skin-streifen { flex: none; display: flex; width: 64px; height: 34px; border-radius: 10px; overflow: hidden; border: 1px solid var(--linie); }
+.skin-streifen span { flex: 1; }
+.skin-zeile[aria-expanded="true"] .import-pfeil { transform: rotate(90deg); }
+.skin-liste:not([hidden]) { margin-top: 12px; }
+.kachel-text:has(> h3:only-child) { padding-bottom: 14px; }
+.skin-liste[hidden] { display: none; }
