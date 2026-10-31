@@ -299,7 +299,9 @@ textarea.eingabe { min-height: 90px; resize: vertical; }
 .fehler[hidden] { display: none; }
 
 /* ===== Untere Leiste ===== */
-footer.version { text-align: center; font-size: 0.72rem; color: var(--text-leise); padding: 0 0 8px; }
+/* Die Versionszeile steht in den Einstellungen; das Element bleibt für die Versionsprüfung und die Sicherung erhalten. */
+footer.version { display: none; }
+.einst-version { margin: 4px 0 24px; }
 nav {
   display: flex;
   gap: 2px;

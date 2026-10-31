@@ -4297,7 +4297,9 @@ function einstellungenOeffnen() {
       pushBox,
       el("h3", { class: "abschnitt", text: "Sicherung" }),
       sicherungBox,
-      el("p", { class: "leise hinweis-klein", text: "Die Sicherung enthält alle Rezepte (mit Fotos), Wochenpläne, Vorrat und Einstellungen der Einkaufsliste." })
+      el("p", { class: "leise hinweis-klein", text: "Die Sicherung enthält alle Rezepte (mit Fotos), Wochenpläne, Vorrat und Einstellungen der Einkaufsliste." }),
+      el("h3", { class: "abschnitt", text: "Über die App" }),
+      el("p", { class: "leise einst-version", id: "einst-version", text: "MealMap · Version " + (APP_VERSION_LAUFEND || "?") })
     ]
   });
 }
