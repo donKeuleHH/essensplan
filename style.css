@@ -64,6 +64,7 @@ header {
 .skin-name { display: block; font-weight: 650; font-size: 0.9rem; }
 .skin-name small { display: block; margin-top: 2px; font-weight: 500; color: var(--text-leise); font-size: 0.75rem; }
 .sync-knopf {
+  display: none !important; /* ersetzt durch den Punkt am Zahnrad */
   flex: none;
   font: inherit;
   font-size: 0.8rem;
@@ -337,13 +338,14 @@ nav button.aktiv { color: var(--akzent); background: var(--karte-hell); font-wei
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 0;
 }
 .pfeil {
-  width: 48px;
-  height: 48px;
+  width: 36px;
+  height: 36px;
+  flex: none;
   font: inherit;
-  font-size: 1.6rem;
+  font-size: 1.3rem;
   line-height: 1;
   color: var(--text);
   background: var(--karte);
@@ -355,7 +357,7 @@ nav button.aktiv { color: var(--akzent); background: var(--karte-hell); font-wei
 .pfeil:active { background: var(--karte-hell); }
 .woche-titel { text-align: center; }
 .woche-kw { font-size: 1.3rem; font-weight: 700; }
-.woche-datum { margin-top: 2px; font-size: 0.85rem; color: var(--text-leise); }
+.woche-datum { font-size: 1.05rem; font-weight: 700; white-space: nowrap; }
 .woche-aktionen { display: flex; justify-content: center; align-items: center; gap: 22px; margin: -4px auto 10px; }
 .woche-aktionen .textknopf { display: inline-flex; align-items: center; gap: 6px; }
 .teilen-icon { display: inline-flex; }
@@ -721,7 +723,7 @@ main { touch-action: pan-y; }
   --eingesenkt: none;
   color-scheme: dark;
 }
-:root[data-skin="nacht"] .woche-kopf { background: #9dc3d4; border-radius: 26px; padding: 14px; }
+:root[data-skin="nacht"] .woche-kopf { background: #9dc3d4; border-radius: 999px; padding: 3px; }
 :root[data-skin="nacht"] .woche-kopf .woche-kw,
 :root[data-skin="nacht"] .woche-kopf .woche-datum { color: #10181c; }
 :root[data-skin="nacht"] .woche-kopf .woche-datum { opacity: 0.7; }
@@ -807,9 +809,14 @@ main { touch-action: pan-y; }
 .sport-hinweis.loesch-hinweis { background: var(--bg) linear-gradient(rgba(240, 118, 107, 0.16), rgba(240, 118, 107, 0.16)); }
 
 /* Wochenzeile: links Rückkehr, rechts runde Icon-Knöpfe */
-.woche-aktionen { justify-content: space-between; gap: 10px; margin: 0 4px 10px; }
-.woche-icons { display: flex; gap: 10px; margin-left: auto; }
-.rundknopf-klein { display: grid; place-items: center; width: 38px; height: 38px; padding: 0; color: var(--akzent); background: var(--karte); border: 1px solid var(--linie); border-radius: 50%; box-shadow: var(--erhaben); cursor: pointer; }
+.woche-zeile { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.woche-zeile .woche-kopf { flex: 1; min-width: 0; justify-content: flex-start; gap: 4px; }
+.woche-zeile .woche-titel { flex: none; padding: 0 4px; }
+.woche-zurueck { margin: -6px 0 8px; }
+.woche-zurueck:empty { display: none; }
+.woche-zurueck .textknopf { display: inline-flex; align-items: center; gap: 6px; padding: 4px 2px; }
+.woche-icons { display: flex; gap: 6px; margin-left: auto; flex: none; }
+.rundknopf-klein { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; color: var(--akzent); background: var(--karte); border: 1px solid var(--linie); border-radius: 50%; box-shadow: var(--erhaben); cursor: pointer; }
 .rundknopf-klein:active { background: var(--karte-hell); }
 :root[data-skin="nacht"] .rundknopf-klein { box-shadow: none; }
 
@@ -1038,3 +1045,18 @@ body:has(#einkauf.aktiv) .such-start { display: flex; }
 .wk-weg svg { width: 17px; height: 17px; }
 .wk-weg:active { opacity: 0.7; }
 .wk-modus .wk-reihe { display: none; }
+
+/* Sync-Stand als Punkt am Zahnrad */
+.zahnrad { position: relative; }
+.zahnrad[data-sync]::after { content: ""; position: absolute; top: 3px; right: 3px; width: 11px; height: 11px; border-radius: 50%; background: var(--akzent); border: 2px solid var(--bg); }
+.zahnrad[data-sync="ok"]::after { background: #66c28f; }
+.zahnrad[data-sync="offline"]::after, .zahnrad[data-sync="fehler"]::after { background: var(--gefahr); }
+.zahnrad[data-sync="laeuft"]::after { animation: sync-puls 1.2s ease-in-out infinite; }
+@keyframes sync-puls { 50% { opacity: 0.35; } }
+.konto-karte { display: flex; align-items: center; gap: 12px; width: 100%; margin-bottom: 4px; padding: 14px 16px; font: inherit; color: var(--text); text-align: left; background: var(--karte); border: 1px solid var(--linie); border-radius: 18px; box-shadow: var(--erhaben); cursor: pointer; }
+.konto-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.konto-text b { overflow-wrap: anywhere; }
+.konto-text small { color: var(--text-leise); font-size: 0.8rem; }
+.konto-punkt { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--akzent); }
+.konto-punkt.s-ok { background: #66c28f; }
+.konto-punkt.s-offline, .konto-punkt.s-fehler { background: var(--gefahr); }

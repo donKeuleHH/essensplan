@@ -1182,7 +1182,7 @@ function rezeptZuGericht(r, ziel) {
 
 // Ruft den Importhelfer in Supabase auf. Liefert das fertige Gericht oder wirft eine Fehlermeldung als Text.
 async function rezeptHolen(adresse, personen) {
-  if (!sb || !sbSitzung) throw new Error("Für den Import musst du angemeldet sein (Wolken-Knopf oben).");
+  if (!sb || !sbSitzung) throw new Error("Für den Import musst du angemeldet sein (Einstellungen, ganz oben bei „Konto“).");
   let antwort;
   try {
     antwort = await sb.functions.invoke("rezept-import", { body: { url: adresse } });
@@ -1195,7 +1195,7 @@ async function rezeptHolen(adresse, personen) {
     if (code === "kein-rezept") throw new Error("Auf dieser Seite habe ich kein Rezept gefunden. Du kannst das Gericht von Hand anlegen.");
     if (code === "adresse") throw new Error("Das ist keine gültige Internetadresse.");
     if (code === "abruf") throw new Error("Die Seite konnte nicht geladen werden (vielleicht blockiert sie den Abruf).");
-    if (code === "anmelden") throw new Error("Bitte melde dich neu an (Wolken-Knopf oben).");
+    if (code === "anmelden") throw new Error("Bitte melde dich neu an (Einstellungen, ganz oben bei „Konto“).");
     throw new Error("Der Import hat leider nicht geklappt.");
   }
   const r = antwort.data && antwort.data.rezept;
@@ -1374,30 +1374,26 @@ function wochenAnsichtenZeichnen() {
 
 // Kopfzeile mit Blätter-Pfeilen, in Wochenplan und Einkaufsliste identisch.
 // icons (optional): eigene Rundknöpfe statt „Plan teilen“, z. B. auf der Zutaten-Seite.
+const MONATSKURZ = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sep.", "Okt.", "Nov.", "Dez."];
+// "19.–23. Okt." bzw. "28. Okt.–1. Nov."
+function wochenSpanne(von, bis) {
+  if (von.getMonth() === bis.getMonth()) return von.getDate() + ".–" + bis.getDate() + ". " + MONATSKURZ[bis.getMonth()];
+  return von.getDate() + ". " + MONATSKURZ[von.getMonth()] + "–" + bis.getDate() + ". " + MONATSKURZ[bis.getMonth()];
+}
+
+// Liefert zwei Teile: [0] eine Zeile mit Wochenwahl und Icon-Knöpfen, [1] die (meist leere) Zeile "Zur aktuellen Woche".
 function wochenKopf(icons) {
   const montag = angezeigteWoche;
   const freitag = tagVerschieben(montag, 4);
   const standard = standardWoche();
-  const teile = [el("div", { class: "woche-kopf" },
+  const spanne = wochenSpanne(montag, freitag);
+  const kopf = el("div", { class: "woche-kopf" },
     el("button", { class: "pfeil", type: "button", "aria-label": "Vorherige Woche", onclick: function () { wocheWechseln(-1); }, text: "‹" }),
-    el("div", { class: "woche-titel" },
-      el("div", { class: "woche-kw", text: "KW " + kalenderwoche(montag) }),
-      el("div", { class: "woche-datum", text: kurzDatum(montag) + " – " + kurzDatum(freitag) + freitag.getFullYear() })
+    el("div", { class: "woche-titel", "aria-label": "Woche " + kurzDatum(montag) + " bis " + kurzDatum(freitag) + freitag.getFullYear() },
+      el("div", { class: "woche-datum", text: spanne })
     ),
     el("button", { class: "pfeil", type: "button", "aria-label": "Nächste Woche", onclick: function () { wocheWechseln(1); }, text: "›" })
-  )];
-  const aktionen = el("div", { class: "woche-aktionen" });
-  if (datumSchluessel(montag) !== datumSchluessel(standard)) {
-    const zurueck = el("button", {
-      class: "textknopf", type: "button",
-      onclick: function () { modiBeenden(); angezeigteWoche = standardWoche(); wochenAnsichtenZeichnen(); }
-    });
-    zurueck.innerHTML = RUECK_ICON;
-    zurueck.append(" Zu KW " + kalenderwoche(standard));
-    aktionen.append(zurueck);
-  } else {
-    aktionen.append(el("span"));
-  }
+  );
   const iconBox = el("div", { class: "woche-icons" });
   if (icons) {
     icons.forEach(function (i) {
@@ -1411,9 +1407,18 @@ function wochenKopf(icons) {
       onclick: function () { planTeilenOeffnen(); }
     }, teilenIconKnoten()));
   }
-  aktionen.append(iconBox);
-  teile.push(aktionen);
-  return teile;
+  const zeile = el("div", { class: "woche-zeile" }, kopf, iconBox);
+  const zurueckZeile = el("div", { class: "woche-zurueck" });
+  if (datumSchluessel(montag) !== datumSchluessel(standard)) {
+    const zurueck = el("button", {
+      class: "textknopf", type: "button",
+      onclick: function () { modiBeenden(); angezeigteWoche = standardWoche(); wochenAnsichtenZeichnen(); }
+    });
+    zurueck.innerHTML = RUECK_ICON;
+    zurueck.append(" Zur aktuellen Woche");
+    zurueckZeile.append(zurueck);
+  }
+  return [zeile, zurueckZeile];
 }
 
 function kurzInfo(g) {
@@ -1460,6 +1465,7 @@ function wochenplanZeichnen() {
   if (loeschModus && loeschAuswahl) {
     const belegte = loeschBelegt();
     const anzahl = loeschAuswahl.filter(Boolean).length;
+    teile[0].querySelector(".woche-icons").remove();
     teile.splice(1, 1, el("div", { class: "sport-hinweis loesch-hinweis" },
       el("span", { text: anzahl + " gewählt" }),
       el("button", { type: "button", class: "leise-knopf", onclick: function () { loeschAlleUmschalten(); }, text: "Alle" }),
@@ -1472,8 +1478,8 @@ function wochenplanZeichnen() {
       onclick: function () { sportModusUmschalten(); }
     });
     hantel.innerHTML = SPORT_ICON;
-    teile[1].querySelector(".woche-icons").prepend(hantel);
-    teile[1].querySelector(".woche-icons").append(el("button", {
+    teile[0].querySelector(".woche-icons").prepend(hantel);
+    teile[0].querySelector(".woche-icons").append(el("button", {
       class: "rundknopf-klein", type: "button", "aria-label": "Gerichte entfernen", title: "Gerichte entfernen",
       onclick: function () { loeschModusStarten(); }
     }, loeschIconKnoten()));
@@ -3980,6 +3986,8 @@ function syncStatusSetzen(status, meldung) {
 
 // Kleiner Knopf oben rechts: zeigt den Stand und öffnet die Konto-Ansicht.
 function anzeigeAktualisieren() {
+  const rad = document.getElementById("einstellungen-knopf");
+  if (rad) { if (sb) rad.dataset.sync = syncStatus; else delete rad.dataset.sync; }
   const knopf = document.getElementById("sync-knopf");
   if (!knopf) return;
   if (!sb) { knopf.hidden = true; return; }
@@ -4199,7 +4207,7 @@ function pushBereichZeichnen(box) {
     if (!pushUnterstuetzt()) {
       teile = [text("Mitteilungen gehen nur, wenn MealMap auf dem Home-Bildschirm liegt (Teilen-Menü, „Zum Home-Bildschirm“) und das iPhone iOS 16.4 oder neuer hat.")];
     } else if (!sb || !sbSitzung) {
-      teile = [text("Bitte melde dich zuerst an (Wolken-Knopf oben). Danach kannst du Mitteilungen einschalten.")];
+      teile = [text("Bitte melde dich zuerst an (Einstellungen, ganz oben bei „Konto“). Danach kannst du Mitteilungen einschalten.")];
     } else {
       let abo = null;
       try { abo = await pushAbo(); } catch (e) {}
@@ -4259,6 +4267,24 @@ document.addEventListener("visibilitychange", function () {
   if (document.visibilityState === "hidden" && pushWarteschlange.length > 0) pushWarteschlangeSenden();
 });
 
+// Konto und Sync-Stand: früher der Knopf oben rechts, jetzt der erste Eintrag der Einstellungen.
+function kontoKarte() {
+  if (!sb) return null;
+  const texte = {
+    abgemeldet: "Nicht angemeldet. Tippen zum Anmelden.", laeuft: "Abgleich läuft …", ok: "Synchron",
+    offline: "Offline. Änderungen werden nachgeholt.", fehler: "Der letzte Abgleich hat nicht geklappt."
+  };
+  const email = sbSitzung && sbSitzung.user && sbSitzung.user.email ? sbSitzung.user.email : "";
+  return el("button", { class: "konto-karte", type: "button", onclick: function () { kontoOeffnen(false); } },
+    el("span", { class: "konto-punkt s-" + syncStatus, "aria-hidden": "true" }),
+    el("span", { class: "konto-text" },
+      el("b", { text: email || "Konto" }),
+      el("small", { text: texte[syncStatus] || "" })
+    ),
+    el("span", { class: "import-pfeil", "aria-hidden": "true", text: "›" })
+  );
+}
+
 function einstellungenOeffnen() {
   const liste = el("div", { class: "skin-liste" });
   function zeichnen() {
@@ -4287,6 +4313,7 @@ function einstellungenOeffnen() {
     titel: "Einstellungen",
     links: { text: "Schließen", aktion: blattSchliessen },
     inhalt: [
+      kontoKarte(),
       el("h3", { class: "abschnitt", text: "Farbvariante" }),
       liste,
       el("p", { class: "leise", style: "margin-top: 16px", text: "Die Wahl gilt nur für dieses Gerät." }),
