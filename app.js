@@ -215,11 +215,28 @@ function khChips(aktuell, beiWahl) {
   return leiste;
 }
 let filterListe = { kh: "", ern: "" };
+let artFilterListe = ""; // gewählte Rezeptart in der Gerichteliste ("" = alle)
 let suchtextListe = "";
 
 // Ernährungsform eines Gerichts: "" (keine Angabe), "vegetarisch" oder "vegan".
 // Vegane Gerichte sind auch vegetarisch und erscheinen deshalb im Filter "Vegetarisch" mit.
 const ERN_TEXT = { vegetarisch: "vegetarisch", vegan: "vegan" };
+
+// Rezeptart: "Hauptgericht" (Standard, kommt in den Wochenplan) oder eine eigene Art wie "Backen & Snacks".
+const ART_HAUPT = "Hauptgericht";
+const ART_STANDARD = [ART_HAUPT, "Backen & Snacks"];
+function artVon(g) { return (g && typeof g.art === "string" && g.art.trim()) || ART_HAUPT; }
+// Alle Arten: die Standardarten plus alles, was ein Rezept nutzt (extra: eine gerade neu getippte Art).
+function artenListe(extra) {
+  const liste = ART_STANDARD.slice();
+  const dazu = gerichte.map(artVon).concat(extra ? [extra] : []);
+  dazu.forEach(function (a) { if (liste.indexOf(a) < 0) liste.push(a); });
+  return liste.slice(0, ART_STANDARD.length).concat(liste.slice(ART_STANDARD.length).sort(function (a, b) { return a.localeCompare(b, "de"); }));
+}
+function artenGenutzt() {
+  const liste = artenListe().filter(function (a) { return gerichte.some(function (g) { return artVon(g) === a; }); });
+  return liste;
+}
 
 function ernaehrungPasst(g, filter) {
   if (!filter) return true;
@@ -567,11 +584,25 @@ function listeZeichnen() {
     ));
   } else {
     const ergebnis = el("div");
+    const artLeiste = el("div", { class: "art-leiste" });
+    function artLeisteZeichnen() {
+      const arten = artenGenutzt();
+      if (arten.indexOf(artFilterListe) < 0) artFilterListe = "";
+      artLeiste.hidden = arten.length < 2;
+      artLeiste.replaceChildren.apply(artLeiste, [""].concat(arten).map(function (a) {
+        return el("button", {
+          class: "chip" + (a === artFilterListe ? " aktiv" : ""), type: "button", text: a || "Alle",
+          onclick: function () { artFilterListe = a; artLeisteZeichnen(); ergebnisZeichnen(); }
+        });
+      }));
+    }
     function ergebnisZeichnen() {
-      const sichtbar = sortiert.filter(function (g) { return gerichtTrifft(g, filterListe, suchtextListe); });
+      const sichtbar = sortiert.filter(function (g) {
+        return gerichtTrifft(g, filterListe, suchtextListe) && (!artFilterListe || artVon(g) === artFilterListe);
+      });
       const innen = [];
       if (sichtbar.length === 0) {
-        const gefiltert = suchtextListe.trim() || filterListe.kh || filterListe.ern;
+        const gefiltert = suchtextListe.trim() || filterListe.kh || filterListe.ern || artFilterListe;
         innen.push(el("p", { class: "leise", text: gefiltert
           ? "Kein Gericht gefunden. Passe Suche oder Filter an."
           : "Kein Gericht vorhanden." }));
@@ -590,7 +621,9 @@ function listeZeichnen() {
       beiEingabe: function (t) { suchtextListe = t; ergebnisZeichnen(); },
       beiFilter: ergebnisZeichnen
     }));
+    teile.push(artLeiste);
     teile.push(ergebnis);
+    artLeisteZeichnen();
     ergebnisZeichnen();
   }
 
@@ -716,7 +749,8 @@ function detailOeffnen(id, wahl) {
   const inhalt = [
     g.bild ? el("img", { class: "detail-bild", src: g.bild, alt: g.titel }) : null,
     el("h1", { class: "detail-titel", text: g.titel }),
-    (KH_TEXT[g.khStufe] || ERN_TEXT[g.ernaehrung]) ? el("div", { class: "chips-detail" },
+    (KH_TEXT[g.khStufe] || ERN_TEXT[g.ernaehrung] || artVon(g) !== ART_HAUPT) ? el("div", { class: "chips-detail" },
+      artVon(g) !== ART_HAUPT ? el("span", { class: "status", text: artVon(g) }) : null,
       KH_TEXT[g.khStufe] ? el("span", { class: "status", text: KH_TEXT[g.khStufe] }) : null,
       ERN_TEXT[g.ernaehrung] ? el("span", { class: "status", text: ERN_TEXT[g.ernaehrung] }) : null
     ) : null,
@@ -757,8 +791,14 @@ function detailOeffnen(id, wahl) {
       el("button", { class: "knopf knopf-sekundaer", type: "button", style: "width: 100%", onclick: zurueck, text: "Zurück" })
     ));
   } else {
-    inhalt.push(el("div", { class: "reihe", style: "margin-top: 28px" },
-      el("button", { class: "knopf knopf-primaer", type: "button", onclick: function () { formularOeffnen(g); }, text: "Bearbeiten" }),
+    if (g.zutaten.length > 0) {
+      inhalt.push(el("div", { style: "margin-top: 28px" },
+        el("button", { class: "knopf knopf-primaer", type: "button", style: "width: 100%",
+          onclick: function () { zutatenAufListe(g, anzeigePortionen); }, text: "Zur Einkaufsliste" })
+      ));
+    }
+    inhalt.push(el("div", { class: "reihe", style: g.zutaten.length > 0 ? "" : "margin-top: 28px" },
+      el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { formularOeffnen(g); }, text: "Bearbeiten" }),
       el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { gerichtKopieren(g); }, text: "Kopieren" })
     ));
     inhalt.push(el("div", { class: "reihe" },
@@ -772,6 +812,49 @@ function detailOeffnen(id, wahl) {
       ? { text: "Zurück", aktion: function () { gerichtWaehlen(wahl.index, wahl.aktuelleId); } }
       : { text: "Schließen", aktion: blattSchliessen },
     inhalt: inhalt
+  });
+}
+
+// Zutaten eines Rezepts auf die Einkaufsliste der angezeigten Woche setzen (als eigene Artikel).
+function zutatenAufListe(g, portionen) {
+  const faktor = portionen / g.portionen;
+  const imVorrat = vorratNamenSet();
+  const posten = g.zutaten.filter(function (z) { return z.name && z.name.trim(); }).map(function (z) {
+    const menge = z.menge === null || z.menge === undefined ? "" : (zahlText(z.menge * faktor) + (z.einheit ? " " + z.einheit : ""));
+    return { name: z.name.trim(), menge: menge, an: !imVorrat.has(z.name.trim().toLowerCase()), vorrat: imVorrat.has(z.name.trim().toLowerCase()) };
+  });
+  const zaehler = el("p", { class: "leise" });
+  const ul = el("div", { class: "einkauf-auswahl" });
+  const knopf = el("button", { class: "knopf knopf-primaer", type: "button", style: "width: 100%" });
+  function zeichnen() {
+    const n = posten.filter(function (p) { return p.an; }).length;
+    knopf.textContent = n === 0 ? "Nichts ausgewählt" : n + (n === 1 ? " Zutat" : " Zutaten") + " hinzufügen";
+    knopf.disabled = n === 0;
+    ul.replaceChildren.apply(ul, posten.map(function (p) {
+      return el("button", {
+        class: "auswahl-zeile" + (p.an ? " an" : ""), type: "button", role: "checkbox", "aria-checked": p.an ? "true" : "false",
+        onclick: function () { p.an = !p.an; zeichnen(); }
+      },
+        el("span", { class: "auswahl-haken", text: p.an ? "✓" : "" }),
+        el("span", { class: "auswahl-name" }, p.name, p.vorrat ? el("small", { text: " · im Vorrat" }) : null),
+        el("span", { class: "auswahl-menge", text: p.menge }));
+    }));
+  }
+  zaehler.textContent = "Für " + zahlText(portionen) + " " + pluralPortionen(portionen) + ", auf die Liste der Woche ab " + kurzDatum(tagVerschieben(angezeigteWoche, 0)) + " (Zutaten im Vorrat sind abgewählt).";
+  knopf.addEventListener("click", async function () {
+    knopf.disabled = true;
+    const woche = angezeigteWoche;
+    for (const p of posten.filter(function (x) { return x.an; })) {
+      await extraHinzufuegen(woche, p.name, p.menge, "");
+    }
+    syncAnstossen();
+    blattSchliessen();
+  });
+  zeichnen();
+  blattZeigen({
+    titel: "Zur Einkaufsliste",
+    links: { text: "Zurück", aktion: function () { detailOeffnen(g.id); } },
+    inhalt: [el("h1", { class: "detail-titel", text: g.titel }), zaehler, ul, el("div", { style: "margin-top: 20px" }, knopf)]
   });
 }
 
@@ -874,6 +957,34 @@ function formularOeffnen(gericht) {
     el("option", { value: "vegan", text: "Vegan" })
   );
   ernaehrungFeld.value = g.ernaehrung === "vegetarisch" || g.ernaehrung === "vegan" ? g.ernaehrung : "";
+
+  // Rezeptart: Chips mit allen bekannten Arten, dazu "+ Neue Art".
+  let gewaehlteArt = artVon(g);
+  let neueArten = [];
+  const artFeld = el("div", { class: "art-leiste art-form" });
+  function artFeldZeichnen(eingabeOffen) {
+    const knoten = artenListe().concat(neueArten.filter(function (a) { return artenListe().indexOf(a) < 0; })).map(function (a) {
+      return el("button", {
+        class: "chip" + (a === gewaehlteArt ? " aktiv" : ""), type: "button", text: a,
+        onclick: function () { gewaehlteArt = a; artFeldZeichnen(false); }
+      });
+    });
+    if (eingabeOffen) {
+      const feld = el("input", { type: "text", class: "eingabe art-neu", maxlength: "30", autocomplete: "off", autocapitalize: "sentences", placeholder: "Neue Art, z. B. Dessert" });
+      const fertig = function () {
+        const name = feld.value.trim();
+        if (name) { if (artenListe().concat(neueArten).indexOf(name) < 0) neueArten.push(name); gewaehlteArt = name; }
+        artFeldZeichnen(false);
+      };
+      feld.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); fertig(); } });
+      knoten.push(feld, el("button", { class: "chip aktiv", type: "button", text: "OK", onclick: fertig }));
+    } else {
+      knoten.push(el("button", { class: "chip chip-neu", type: "button", text: "+ Neue Art", onclick: function () { artFeldZeichnen(true); } }));
+    }
+    artFeld.replaceChildren.apply(artFeld, knoten);
+    if (eingabeOffen) artFeld.querySelector("input").focus();
+  }
+  artFeldZeichnen(false);
 
   // Ändert man die Portionen, rechnen sich alle Mengen proportional um.
   let letztePortionen = zahlLesen(portionenFeld.value);
@@ -1020,6 +1131,7 @@ function formularOeffnen(gericht) {
       naehrwerte: werte,
       khStufe: khStufeFeld.value,
       ernaehrung: ernaehrungFeld.value,
+      art: gewaehlteArt === ART_HAUPT ? "" : gewaehlteArt,
       notizen: notizenFeld.value.trim(),
       erstellt: g.erstellt || jetzt,
       geaendert: jetzt,
@@ -1060,6 +1172,7 @@ function formularOeffnen(gericht) {
     inhalt: [
       neu ? importKarte(function (importiert) { formularOeffnen(importiert); }) : null,
       el("label", { class: "feld" }, el("span", { text: "Titel" }), titelFeld),
+      el("div", { class: "feld" }, el("span", { text: "Art (Hauptgerichte kommen in den Wochenplan)" }), artFeld),
       el("div", { class: "feld" }, el("span", { text: "Foto (optional)" }), bildBereich, dateiFeld),
       el("label", { class: "feld" }, el("span", { text: "Anzahl Portionen (Mengen rechnen sich automatisch um)" }), portionenFeld),
       el("label", { class: "feld" }, el("span", { text: "Kohlenhydrate (für den Filter bei Sport- und Ruhetagen)" }), khStufeFeld),
@@ -1706,6 +1819,17 @@ function gerichtWaehlen(index, aktuelleId) {
   const aktuellesGericht = gerichte.find(function (x) { return x.id === aktuelleId; }) || null;
   const auswahlFilter = { kh: "", ern: "" };
   let suchtext = "";
+  let alleArten = false; // Standard: nur Hauptgerichte (Snacks und Co. bleiben draußen)
+  const artSchalter = el("div", { class: "art-leiste" });
+  function artSchalterZeichnen() {
+    artSchalter.hidden = !gerichte.some(function (g) { return artVon(g) !== ART_HAUPT; });
+    artSchalter.replaceChildren(
+      el("button", { class: "chip" + (alleArten ? "" : " aktiv"), type: "button", text: "Hauptgerichte",
+        onclick: function () { alleArten = false; artSchalterZeichnen(); listeZeichnen2(); } }),
+      el("button", { class: "chip" + (alleArten ? " aktiv" : ""), type: "button", text: "Alle anzeigen",
+        onclick: function () { alleArten = true; artSchalterZeichnen(); listeZeichnen2(); } })
+    );
+  }
   const zuletztListe = zuletztGeplanteGerichte(aktuelleId, 6);
   const zuletzt = zuletztListe.length === 0 ? null : el("div", { class: "zuletzt" },
     el("h4", { text: "Zuletzt verwendet" }),
@@ -1728,7 +1852,7 @@ function gerichtWaehlen(index, aktuelleId) {
   function listeZeichnen2() {
     if (zuletzt) zuletzt.hidden = !!(suchtext.trim() || auswahlFilter.kh || auswahlFilter.ern);
     const treffer = gerichte
-      .filter(function (g) { return g.id !== aktuelleId && gerichtTrifft(g, auswahlFilter, suchtext); })
+      .filter(function (g) { return g.id !== aktuelleId && (alleArten || artVon(g) === ART_HAUPT) && gerichtTrifft(g, auswahlFilter, suchtext); })
       .sort(function (a, b) { return a.titel.localeCompare(b.titel, "de"); });
     if (gerichte.length === 1 && aktuellesGericht && treffer.length === 0 && !suchtext.trim()) {
       liste.replaceChildren();
@@ -1748,6 +1872,7 @@ function gerichtWaehlen(index, aktuelleId) {
       }));
     }
   }
+  artSchalterZeichnen();
   listeZeichnen2();
 
   const auswaertsIcon = el("div", { class: "thumb klein auswaerts-kreis", "aria-hidden": "true" });
@@ -1785,6 +1910,7 @@ function gerichtWaehlen(index, aktuelleId) {
       auswaertsKnopf,
       zuletzt,
       gerichte.length > 0 ? kopfzeile : null,
+      gerichte.length > 0 ? artSchalter : null,
       liste
     ]
   });
@@ -3788,7 +3914,7 @@ const SYNC_TABELLEN = [
         id: g.id,
         daten: {
           titel: g.titel, portionen: g.portionen, zutaten: g.zutaten, naehrwerte: g.naehrwerte,
-          notizen: g.notizen, erstellt: g.erstellt, geaendert: g.geaendert, khStufe: g.khStufe || "", ernaehrung: g.ernaehrung || ""
+          notizen: g.notizen, erstellt: g.erstellt, geaendert: g.geaendert, khStufe: g.khStufe || "", ernaehrung: g.ernaehrung || "", art: g.art || ""
         },
         bild: g.bild || null,
         geloescht: !!g.geloescht,
@@ -3799,7 +3925,7 @@ const SYNC_TABELLEN = [
       const d = z.daten || {};
       return {
         id: z.id, titel: d.titel || "", bild: z.bild || null, portionen: d.portionen || 1,
-        zutaten: d.zutaten || [], naehrwerte: d.naehrwerte || {}, notizen: d.notizen || "", khStufe: d.khStufe || "", ernaehrung: d.ernaehrung || "",
+        zutaten: d.zutaten || [], naehrwerte: d.naehrwerte || {}, notizen: d.notizen || "", khStufe: d.khStufe || "", ernaehrung: d.ernaehrung || "", art: d.art || "",
         erstellt: d.erstellt || z.aktualisiert, geaendert: d.geaendert || z.aktualisiert,
         geloescht: !!z.geloescht, aktualisiert: z.aktualisiert
       };

@@ -1069,3 +1069,18 @@ body:has(#einkauf.aktiv) .such-start { display: flex; }
 .skin-liste:not([hidden]) { margin-top: 12px; }
 .kachel-text:has(> h3:only-child) { padding-bottom: 14px; }
 .skin-liste[hidden] { display: none; }
+
+/* Rezeptart: Chips-Leiste (Liste, Formular, Wochenplan-Auswahl) und Auswahl der Zutaten für die Einkaufsliste */
+.art-leiste { display: flex; gap: 6px; overflow-x: auto; margin: 4px 0 12px; padding: 2px; scrollbar-width: none; align-items: center; }
+.art-leiste::-webkit-scrollbar { display: none; }
+.art-leiste[hidden] { display: none; }
+.art-leiste .chip { flex: 0 0 auto; white-space: nowrap; }
+.art-form { flex-wrap: wrap; overflow: visible; margin: 6px 0 0; }
+.art-form .art-neu { flex: 1 1 140px; min-width: 0; }
+.einkauf-auswahl { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
+.auswahl-zeile { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 6px; background: transparent; border: 0; border-bottom: 1px solid var(--linie); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.auswahl-haken { flex: 0 0 24px; height: 24px; border: 2px solid var(--linie); border-radius: 7px; display: grid; place-items: center; font-size: .9rem; line-height: 1; }
+.auswahl-zeile.an .auswahl-haken { background: var(--akzent); border-color: var(--akzent); color: var(--auf-akzent); }
+.auswahl-name { flex: 1; min-width: 0; }
+.auswahl-name small, .auswahl-menge { opacity: .65; }
+.auswahl-menge { white-space: nowrap; }
