@@ -195,6 +195,14 @@ function zahlText(n) {
 }
 
 function pluralPortionen(n) { return n === 1 ? "Portion" : "Portionen"; }
+// Einheit der Mengenangabe eines Rezepts: Portion (Standard), Person, Stück, Glas oder Scheibe.
+const PORTION_EINHEITEN = [["Portion", "Portionen"], ["Person", "Personen"], ["Stück", "Stück"], ["Glas", "Gläser"], ["Scheibe", "Scheiben"]];
+function einheitPaar(g) {
+  const name = g && g.portionenEinheit;
+  return PORTION_EINHEITEN.find(function (e) { return e[0] === name; }) || PORTION_EINHEITEN[0];
+}
+function portionenWort(g, n) { const e = einheitPaar(g); return n === 1 ? e[0] : e[1]; }
+function portionenMitEinheit(g, n) { return zahlText(n) + " " + portionenWort(g, n); }
 
 // Kohlenhydrat-Stufe eines Gerichts: "" (keine Angabe), "arm" oder "reich"
 const KH_TEXT = { arm: "kohlenhydratarm", reich: "kohlenhydratreich" };
@@ -642,7 +650,7 @@ function gerichtKarte(g, beiKlick) {
     ? el("img", { class: "thumb", src: g.bild, alt: "", loading: "lazy" })
     : kreisBild(g.titel, "thumb");
 
-  const meta = [zahlText(g.portionen) + " " + pluralPortionen(g.portionen)];
+  const meta = [portionenMitEinheit(g, g.portionen)];
   if (g.naehrwerte && g.naehrwerte.kcal !== null && g.naehrwerte.kcal !== undefined) {
     meta.push(zahlText(g.naehrwerte.kcal) + " kcal");
   }
@@ -723,7 +731,7 @@ function detailOeffnen(id, wahl) {
   const zutatenUl = el("ul", { class: "zutatenliste" });
   function skalierenZeichnen() {
     const faktor = anzeigePortionen / g.portionen;
-    portionenText.textContent = "Für " + zahlText(anzeigePortionen) + " " + pluralPortionen(anzeigePortionen);
+    portionenText.textContent = "Für " + portionenMitEinheit(g, anzeigePortionen);
     portionenHinweis.hidden = anzeigePortionen === g.portionen;
     zutatenUl.replaceChildren.apply(zutatenUl, g.zutaten.map(function (z) {
       const menge = z.menge === null || z.menge === undefined ? "" : zahlText(z.menge * faktor) + " " + z.einheit;
@@ -840,10 +848,10 @@ function zutatenAufListe(g, portionen) {
         el("span", { class: "auswahl-menge", text: p.menge }));
     }));
   }
-  zaehler.textContent = "Für " + zahlText(portionen) + " " + pluralPortionen(portionen) + ", auf die Liste der Woche ab " + kurzDatum(tagVerschieben(angezeigteWoche, 0)) + " (Zutaten im Vorrat sind abgewählt).";
+  zaehler.textContent = "Für " + portionenMitEinheit(g, portionen) + ", auf die Liste der Woche ab " + kurzDatum(tagVerschieben(angezeigteWoche, 0)) + " (Zutaten im Vorrat sind abgewählt).";
   knopf.addEventListener("click", async function () {
     knopf.disabled = true;
-    const woche = angezeigteWoche;
+    const woche = datumSchluessel(angezeigteWoche);
     for (const p of posten.filter(function (x) { return x.an; })) {
       await extraHinzufuegen(woche, p.name, p.menge, "");
     }
@@ -943,6 +951,10 @@ function formularOeffnen(gericht) {
   const portionenFeld = el("input", {
     type: "text", class: "eingabe", inputmode: "numeric", autocomplete: "off", value: zahlText(g.portionen)
   });
+
+  const einheitFeld = el("select", { class: "eingabe", "aria-label": "Einheit der Anzahl" },
+    PORTION_EINHEITEN.map(function (e) { return el("option", { value: e[0], text: e[1] }); }));
+  einheitFeld.value = einheitPaar(g)[0];
 
   const khStufeFeld = el("select", { class: "eingabe" },
     el("option", { value: "", text: "Keine Angabe" }),
@@ -1132,6 +1144,7 @@ function formularOeffnen(gericht) {
       khStufe: khStufeFeld.value,
       ernaehrung: ernaehrungFeld.value,
       art: gewaehlteArt === ART_HAUPT ? "" : gewaehlteArt,
+      portionenEinheit: einheitFeld.value === PORTION_EINHEITEN[0][0] ? "" : einheitFeld.value,
       notizen: notizenFeld.value.trim(),
       erstellt: g.erstellt || jetzt,
       geaendert: jetzt,
@@ -1174,7 +1187,8 @@ function formularOeffnen(gericht) {
       el("label", { class: "feld" }, el("span", { text: "Titel" }), titelFeld),
       el("div", { class: "feld" }, el("span", { text: "Art (Hauptgerichte kommen in den Wochenplan)" }), artFeld),
       el("div", { class: "feld" }, el("span", { text: "Foto (optional)" }), bildBereich, dateiFeld),
-      el("label", { class: "feld" }, el("span", { text: "Anzahl Portionen (Mengen rechnen sich automatisch um)" }), portionenFeld),
+      el("div", { class: "feld" }, el("span", { text: "Menge des Rezepts (Zutaten rechnen sich automatisch um)" }),
+        el("div", { class: "portionen-zeile" }, portionenFeld, einheitFeld)),
       el("label", { class: "feld" }, el("span", { text: "Kohlenhydrate (für den Filter bei Sport- und Ruhetagen)" }), khStufeFeld),
       el("label", { class: "feld" }, el("span", { text: "Ernährung (für den Filter nach vegetarisch oder vegan)" }), ernaehrungFeld),
       el("h3", { class: "abschnitt", text: "Zutaten" }),
@@ -1535,7 +1549,7 @@ function wochenKopf(icons) {
 }
 
 function kurzInfo(g) {
-  const teile = [zahlText(g.portionen) + " " + pluralPortionen(g.portionen)];
+  const teile = [portionenMitEinheit(g, g.portionen)];
   if (g.naehrwerte && g.naehrwerte.kcal !== null && g.naehrwerte.kcal !== undefined) {
     teile.push(zahlText(g.naehrwerte.kcal) + " kcal");
   }
@@ -1629,7 +1643,7 @@ function portionenAnzeigen(huelle, index, g) {
   const n = tagPortionen(plan, index, g);
   huelle.querySelector(".wk-pz-zahl").textContent = zahlText(n);
   huelle.classList.toggle("ang", n !== g.portionen);
-  huelle.title = n !== g.portionen ? "Rezept: " + zahlText(g.portionen) + " Portionen" : "";
+  huelle.title = n !== g.portionen ? "Rezept: " + portionenMitEinheit(g, g.portionen) : "";
 }
 
 function portionenAendern(index, delta) {
@@ -3707,7 +3721,7 @@ async function planBildErzeugen(montag) {
       c.font = "700 41px " + SCHRIFT;
       let zeilen = textKuerzen(c, g.titel, tb, 2);
       if (zeilen.length === 2) { c.font = "700 36px " + SCHRIFT; zeilen = textKuerzen(c, g.titel, tb, 2); }
-      const meta = [zahlText(g.portionen) + " " + pluralPortionen(g.portionen)];
+      const meta = [portionenMitEinheit(g, g.portionen)];
       if (KH_TEXT[g.khStufe]) meta.push(KH_TEXT[g.khStufe]);
       if (ERN_TEXT[g.ernaehrung]) meta.push(ERN_TEXT[g.ernaehrung]);
       const zwei = zeilen.length === 2;
@@ -3852,6 +3866,16 @@ const hakenNeuLaden = ladefunktion("haken", function (liste) {
 });
 
 const extrasNeuLaden = ladefunktion("extras", function (liste) {
+  // Reparatur (Version 4.36/4.37): Artikel aus "Zur Einkaufsliste" hatten ein Datum statt der Wochenangabe als Text.
+  const kaputt = liste.filter(function (e) { return e.woche instanceof Date; });
+  if (kaputt.length > 0) {
+    const repariert = kaputt.map(function (e) {
+      return Object.assign({}, e, { woche: datumSchluessel(e.woche), aktualisiert: zeitNach(e), dirty: 1 });
+    });
+    liste = liste.filter(function (e) { return !(e.woche instanceof Date); }).concat(repariert);
+    transaktion(["extras"], function (st) { repariert.forEach(function (e) { st.extras.put(e); }); })
+      .then(function () { syncAnstossen(); }).catch(function () {});
+  }
   extras = new Map(liste.map(function (e) { return [e.id, e]; }));
   extraVorschlaegeAktualisieren();
   einkaufZeichnen();
@@ -3915,7 +3939,7 @@ const SYNC_TABELLEN = [
         id: g.id,
         daten: {
           titel: g.titel, portionen: g.portionen, zutaten: g.zutaten, naehrwerte: g.naehrwerte,
-          notizen: g.notizen, erstellt: g.erstellt, geaendert: g.geaendert, khStufe: g.khStufe || "", ernaehrung: g.ernaehrung || "", art: g.art || ""
+          notizen: g.notizen, erstellt: g.erstellt, geaendert: g.geaendert, khStufe: g.khStufe || "", ernaehrung: g.ernaehrung || "", art: g.art || "", portionenEinheit: g.portionenEinheit || ""
         },
         bild: g.bild || null,
         geloescht: !!g.geloescht,
@@ -3926,7 +3950,7 @@ const SYNC_TABELLEN = [
       const d = z.daten || {};
       return {
         id: z.id, titel: d.titel || "", bild: z.bild || null, portionen: d.portionen || 1,
-        zutaten: d.zutaten || [], naehrwerte: d.naehrwerte || {}, notizen: d.notizen || "", khStufe: d.khStufe || "", ernaehrung: d.ernaehrung || "", art: d.art || "",
+        zutaten: d.zutaten || [], naehrwerte: d.naehrwerte || {}, notizen: d.notizen || "", khStufe: d.khStufe || "", ernaehrung: d.ernaehrung || "", art: d.art || "", portionenEinheit: d.portionenEinheit || "",
         erstellt: d.erstellt || z.aktualisiert, geaendert: d.geaendert || z.aktualisiert,
         geloescht: !!z.geloescht, aktualisiert: z.aktualisiert
       };

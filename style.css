@@ -1084,3 +1084,4 @@ body:has(#einkauf.aktiv) .such-start { display: flex; }
 .auswahl-name { flex: 1; min-width: 0; }
 .auswahl-name small, .auswahl-menge { opacity: .65; }
 .auswahl-menge { white-space: nowrap; }
+.portionen-zeile { display: grid; grid-template-columns: 90px 1fr; gap: 10px; }
