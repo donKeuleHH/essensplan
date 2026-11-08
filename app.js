@@ -1241,7 +1241,7 @@ function zutatZerlegen(zeile) {
 const IMPORT_GANZE = { "Stück": 0.5, Dose: 0.5, Packung: 0.5, Bund: 0.5, Prise: 0.5 };
 
 function importPersonenLesen() {
-  try { const n = Number(localStorage.getItem("essensplan-import-personen")); if (Number.isInteger(n) && n >= 1 && n <= 12) return n; } catch (e) {}
+  try { const n = Number(localStorage.getItem("essensplan-import-personen")); if (Number.isInteger(n) && n >= 1 && n <= 99) return n; } catch (e) {}
   return 2;
 }
 
@@ -1324,8 +1324,7 @@ async function rezeptHolen(adresse, personen) {
 function importKarte(beiErfolg) {
   const feld = el("input", { type: "url", class: "eingabe", placeholder: "https://…", autocomplete: "off", autocapitalize: "off", inputmode: "url" });
   const meldung = el("p", { class: "leise", hidden: true });
-  const personen = el("select", { class: "eingabe", "aria-label": "Für wie viele Personen" },
-    [1, 2, 3, 4, 5, 6, 7, 8].map(function (n) { return el("option", { value: String(n), text: n === 1 ? "1 Person" : n + " Personen" }); }));
+  const personen = el("input", { type: "text", class: "eingabe", inputmode: "numeric", autocomplete: "off", "aria-label": "Für wie viele Personen" });
   personen.value = String(importPersonenLesen());
   const knopf = el("button", { class: "knopf knopf-sekundaer", type: "button", style: "width: 100%", text: "Importieren" });
   knopf.addEventListener("click", async function () {
@@ -1333,8 +1332,10 @@ function importKarte(beiErfolg) {
     if (!adresse) { meldung.textContent = "Bitte füge zuerst einen Link ein."; meldung.hidden = false; return; }
     knopf.disabled = true; knopf.textContent = "Lade Rezept …"; meldung.hidden = true;
     try {
-      try { localStorage.setItem("essensplan-import-personen", personen.value); } catch (e) {}
-      beiErfolg(await rezeptHolen(adresse, Number(personen.value)));
+      const anzahl = parseInt(personen.value, 10);
+      if (!(anzahl >= 1 && anzahl <= 99)) throw new Error("Bitte gib eine Personenzahl zwischen 1 und 99 ein.");
+      try { localStorage.setItem("essensplan-import-personen", String(anzahl)); } catch (e) {}
+      beiErfolg(await rezeptHolen(adresse, anzahl));
     } catch (f) {
       meldung.textContent = f.message; meldung.hidden = false;
       knopf.disabled = false; knopf.textContent = "Importieren";
@@ -1343,7 +1344,7 @@ function importKarte(beiErfolg) {
   const inhalt = el("div", { class: "import-inhalt", hidden: true },
     el("p", { class: "leise", text: "Link einer Rezeptseite einfügen. Titel, Zutaten, Anleitung (unter Zubereitung), Nährwerte und Foto werden übernommen." }),
     feld,
-    el("label", { class: "feld", style: "margin-top: 10px" }, el("span", { text: "Kochen für (Mengen werden umgerechnet)" }), personen),
+    el("label", { class: "feld", style: "margin-top: 10px" }, el("span", { text: "Kochen für (Anzahl Personen, Mengen werden umgerechnet)" }), personen),
     knopf, meldung
   );
   const kopf = el("button", { class: "import-kopf", type: "button", "aria-expanded": "false" },
