@@ -1085,3 +1085,27 @@ body:has(#einkauf.aktiv) .such-start { display: flex; }
 .auswahl-name small, .auswahl-menge { opacity: .65; }
 .auswahl-menge { white-space: nowrap; }
 .portionen-zeile { display: grid; grid-template-columns: 90px 1fr; gap: 10px; }
+
+/* Kochmodus */
+.koch-knoepfe { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 4px; }
+.koch { position: fixed; inset: 0; z-index: 150; background: var(--bg); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); }
+.koch-kopf { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px max(18px, env(safe-area-inset-right, 0px)) 8px max(18px, env(safe-area-inset-left, 0px)); font-weight: 600; }
+.koch-titel { flex: 1; min-width: 0; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.koch-link { background: none; border: 0; color: var(--akzent); font: inherit; padding: 8px 0; cursor: pointer; }
+.koch-balken { display: flex; gap: 5px; padding: 0 max(18px, env(safe-area-inset-left, 0px)) 4px; }
+.koch-balken[hidden] { display: none; }
+.koch-balken i { flex: 1; height: 5px; border-radius: 3px; background: var(--karte-hell); }
+.koch-balken i.an { background: var(--akzent); }
+.koch-inhalt { flex: 1; overflow-y: auto; padding: 10px max(22px, env(safe-area-inset-right, 0px)) 20px max(22px, env(safe-area-inset-left, 0px)); touch-action: pan-y; }
+.koch-nr { font-size: .9rem; letter-spacing: .08em; font-weight: 700; color: var(--akzent); margin: 22px 0 10px; }
+.koch-abschnitt { font-size: 1.05rem; color: var(--text-leise); margin: 0 0 10px; }
+.koch-abschnitt[hidden], .koch-hinweis[hidden] { display: none; }
+.koch-text { font-size: 1.75rem; line-height: 1.35; font-weight: 600; white-space: pre-line; }
+.koch-hinweis { margin-top: 22px; font-size: .9rem; color: var(--text-leise); }
+.koch-nav { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; padding: 14px max(18px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(18px, env(safe-area-inset-left, 0px)); background: var(--bg-tief); }
+.koch-nav .knopf:disabled { opacity: .4; }
+.koch-dunkel { position: absolute; inset: 0; background: rgba(8, 10, 14, .55); }
+.koch-blatt { position: absolute; left: 0; right: 0; bottom: 0; max-height: 80%; overflow-y: auto; background: var(--bg); border-radius: 26px 26px 0 0; box-shadow: 0 -10px 40px rgba(0,0,0,.5); padding: 12px max(20px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px)); }
+.koch-griff { width: 44px; height: 5px; border-radius: 3px; background: var(--karte-hell); margin: 0 auto 12px; }
+.koch-blatt-kopf { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 1.15rem; }
+.auswahl-zeile.erledigt .auswahl-name, .auswahl-zeile.erledigt .auswahl-menge { opacity: .45; text-decoration: line-through; }

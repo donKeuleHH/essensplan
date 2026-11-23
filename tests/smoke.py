@@ -31,6 +31,7 @@ SEED = [
     gericht(2, "Haferkekse", 20, [("Haferflocken", 250, "g"), ("Eier", 2, "Stück")], art="Backen & Snacks"),
 ]
 SEED[2]["portionenEinheit"] = "Stück"
+SEED[0]["notizen"] = "Kochen:\n1. Zwiebeln würfeln.\n2. Hackfleisch anbraten.\n3. Nudeln kochen und alles mischen."
 
 SEED_JS = """async (seed) => {
   const db = await new Promise((res, rej) => { const r = indexedDB.open('essensplan'); r.onsuccess = () => res(r.result); r.onerror = rej; });
@@ -95,6 +96,29 @@ with sync_playwright() as p:
     pruefe("Wochenplan-Auswahl: Snack zunächst versteckt", pg.locator(".blatt .waehl-zeile").get_by_text("Haferkekse").count() == 0)
     pg.click(".blatt .chip:has-text('Alle anzeigen')"); pg.wait_for_timeout(300)
     pruefe("Wochenplan-Auswahl: 'Alle anzeigen' zeigt Snack", pg.locator(".blatt .waehl-zeile").get_by_text("Haferkekse").count() >= 1)
+
+    # Kochmodus
+    pg.evaluate("blattSchliessen()"); pg.wait_for_timeout(400)
+    pg.click("nav button[data-ziel=gerichte]"); pg.wait_for_timeout(400)
+    pg.get_by_text("Spaghetti Bolognese").first.click(); pg.wait_for_timeout(500)
+    pg.click(".koch-knoepfe .knopf-primaer"); pg.wait_for_timeout(400)
+    pruefe("Kochmodus: Schritt 1 von 3", "SCHRITT 1 VON 3" in pg.inner_text(".koch") and "Zwiebeln würfeln" in pg.inner_text(".koch"))
+    pg.screenshot(path=os.path.join(OUT, "koch1.png"))
+    pg.click(".koch-nav .knopf-primaer"); pg.wait_for_timeout(200)
+    pruefe("Kochmodus: Weiter zeigt Schritt 2", "SCHRITT 2 VON 3" in pg.inner_text(".koch"))
+    pg.click(".koch-nav .knopf-sekundaer"); pg.wait_for_timeout(200)
+    pruefe("Kochmodus: Zurück zeigt Schritt 1", "SCHRITT 1 VON 3" in pg.inner_text(".koch"))
+    pg.click(".koch-link:has-text('Zutaten')"); pg.wait_for_timeout(300)
+    pg.click(".koch-blatt .auswahl-zeile >> nth=0"); pg.wait_for_timeout(200)
+    pruefe("Kochmodus: Zutat abhakbar", pg.locator(".koch-blatt .auswahl-zeile.an").count() == 1)
+    pg.click(".koch-blatt .schritt >> nth=1"); pg.wait_for_timeout(200)
+    pruefe("Kochmodus: Portionen +1 rechnet Mengen um (400 g -> 500 g)", "500 g" in pg.inner_text(".koch-blatt"))
+    pg.screenshot(path=os.path.join(OUT, "koch2.png"))
+    pg.click(".koch-blatt >> text=Schließen"); pg.wait_for_timeout(200)
+    pg.click(".koch-nav .knopf-primaer"); pg.click(".koch-nav .knopf-primaer"); pg.wait_for_timeout(200)
+    pruefe("Kochmodus: letzter Schritt heißt 'Fertig'", pg.inner_text(".koch-nav .knopf-primaer") == "Fertig")
+    pg.click(".koch-nav .knopf-primaer"); pg.wait_for_timeout(300)
+    pruefe("Kochmodus: Fertig schließt", pg.locator(".koch").count() == 0)
 
     pruefe("Keine JavaScript-Fehler", not fehler)
     if fehler: print(fehler)

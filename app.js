@@ -765,6 +765,17 @@ function detailOeffnen(id, wahl) {
     portionenSchalter
   ];
 
+  if (!wahl && (g.zutaten.length > 0 || g.notizen)) {
+    const kopfKnoepfe = [];
+    kopfKnoepfe.push(el("button", { class: "knopf knopf-primaer", type: "button", style: "width: 100%",
+      onclick: function () { kochmodusOeffnen(g, anzeigePortionen); }, text: "👩‍🍳 Kochen" }));
+    if (g.zutaten.length > 0) {
+      kopfKnoepfe.push(el("button", { class: "knopf knopf-sekundaer", type: "button", style: "width: 100%",
+        onclick: function () { zutatenAufListe(g, anzeigePortionen); }, text: "Zur Einkaufsliste" }));
+    }
+    inhalt.push(el("div", { class: "koch-knoepfe" }, kopfKnoepfe));
+  }
+
   if (hatNaehrwerte) {
     inhalt.push(el("h3", { class: "abschnitt", text: "Nährwerte pro Portion" }));
     inhalt.push(el("div", { class: "kacheln" }, werte.map(function (w) {
@@ -799,13 +810,7 @@ function detailOeffnen(id, wahl) {
       el("button", { class: "knopf knopf-sekundaer", type: "button", style: "width: 100%", onclick: zurueck, text: "Zurück" })
     ));
   } else {
-    if (g.zutaten.length > 0) {
-      inhalt.push(el("div", { style: "margin-top: 28px" },
-        el("button", { class: "knopf knopf-primaer", type: "button", style: "width: 100%",
-          onclick: function () { zutatenAufListe(g, anzeigePortionen); }, text: "Zur Einkaufsliste" })
-      ));
-    }
-    inhalt.push(el("div", { class: "reihe", style: g.zutaten.length > 0 ? "" : "margin-top: 28px" },
+    inhalt.push(el("div", { class: "reihe", style: "margin-top: 28px" },
       el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { formularOeffnen(g); }, text: "Bearbeiten" }),
       el("button", { class: "knopf knopf-sekundaer", type: "button", onclick: function () { gerichtKopieren(g); }, text: "Kopieren" })
     ));
@@ -821,6 +826,138 @@ function detailOeffnen(id, wahl) {
       : { text: "Schließen", aktion: blattSchliessen },
     inhalt: inhalt
   });
+}
+
+/* ---------- Kochmodus: ein Schritt pro Seite, Zutaten zum Abhaken, Bildschirm bleibt an ---------- */
+
+// Zerlegt die Zubereitung in Schritte (nummerierte Zeilen). Überschriften wie "Soße:" werden zur Kopfzeile der folgenden Schritte.
+function kochSchritte(text) {
+  const regel = /^\s*(?:schritt\s*)?(\d{1,2})\s*[.):]\s+(\S.*)$/i;
+  const zeilen = String(text || "").split(/\r?\n/).map(function (z) { return z.trim(); });
+  const schritte = [];
+  let abschnitt = "", lose = [];
+  zeilen.forEach(function (z) {
+    if (z === "") return;
+    const m = regel.exec(z);
+    if (m) {
+      schritte.push({ abschnitt: abschnitt, text: lose.concat([m[2]]).join("\n") });
+      lose = [];
+    } else if (/^(vorbereiten|zubereitung|kochen|backen|gesamt|ruhen)\b.*\bmin\b/i.test(z) || /^quelle:/i.test(z)) {
+      return;
+    } else if (z.length <= 60 && /:$/.test(z)) {
+      abschnitt = z.slice(0, -1);
+    } else {
+      lose.push(z);
+    }
+  });
+  if (lose.length > 0) {
+    if (schritte.length > 0) schritte[schritte.length - 1].text += "\n" + lose.join("\n");
+    else schritte.push({ abschnitt: abschnitt, text: lose.join("\n") });
+  }
+  return schritte;
+}
+
+function kochmodusOeffnen(g, startPortionen) {
+  const schritte = kochSchritte(g.notizen);
+  if (schritte.length === 0) schritte.push({ abschnitt: "", text: "Für dieses Rezept ist keine Zubereitung eingetragen. Die Zutaten findest du oben rechts." });
+  let index = 0;
+  let portionen = startPortionen;
+  const gehakt = new Set();
+  let sperre = null;
+
+  async function sperreHolen() {
+    try { if (navigator.wakeLock && document.visibilityState === "visible") sperre = await navigator.wakeLock.request("screen"); } catch (e) { sperre = null; }
+  }
+  function sichtbarkeit() { if (document.visibilityState === "visible") sperreHolen(); }
+  document.addEventListener("visibilitychange", sichtbarkeit);
+  sperreHolen();
+
+  const balken = el("div", { class: "koch-balken" });
+  const nummer = el("div", { class: "koch-nr" });
+  const abschnittZeile = el("div", { class: "koch-abschnitt" });
+  const textKnoten = el("div", { class: "koch-text" });
+  const hinweis = el("div", { class: "koch-hinweis", text: "Bildschirm bleibt an · Wischen zum Blättern" });
+  const zurueckKnopf = el("button", { class: "knopf knopf-sekundaer", type: "button", text: "Zurück", onclick: function () { gehe(-1); } });
+  const weiterKnopf = el("button", { class: "knopf knopf-primaer", type: "button", onclick: function () { gehe(1); } });
+  const inhalt = el("div", { class: "koch-inhalt" }, nummer, abschnittZeile, textKnoten, hinweis);
+  const kopf = el("div", { class: "koch-kopf" },
+    el("button", { class: "koch-link", type: "button", text: "Beenden", onclick: schliessen }),
+    el("span", { class: "koch-titel", text: g.titel }),
+    el("button", { class: "koch-link", type: "button", text: "Zutaten", onclick: zutatenZeigen }));
+  const huelle = el("div", { class: "koch", role: "dialog", "aria-label": "Kochmodus" },
+    kopf, balken, inhalt, el("div", { class: "koch-nav" }, zurueckKnopf, weiterKnopf));
+
+  function zeichnen() {
+    const s = schritte[index];
+    balken.replaceChildren.apply(balken, schritte.map(function (x, i) { return el("i", { class: i <= index ? "an" : "" }); }));
+    balken.hidden = schritte.length < 2;
+    nummer.textContent = schritte.length > 1 ? "SCHRITT " + (index + 1) + " VON " + schritte.length : "ZUBEREITUNG";
+    abschnittZeile.textContent = s.abschnitt;
+    abschnittZeile.hidden = !s.abschnitt;
+    textKnoten.textContent = s.text;
+    inhalt.scrollTop = 0;
+    zurueckKnopf.disabled = index === 0;
+    weiterKnopf.textContent = index === schritte.length - 1 ? "Fertig" : "Weiter";
+    hinweis.hidden = index > 0 && index < schritte.length - 1;
+  }
+  function gehe(d) {
+    if (d > 0 && index === schritte.length - 1) { schliessen(); return; }
+    const neu = Math.min(schritte.length - 1, Math.max(0, index + d));
+    if (neu === index) return;
+    index = neu; zeichnen();
+  }
+  function schliessen() {
+    document.removeEventListener("visibilitychange", sichtbarkeit);
+    try { if (sperre) sperre.release(); } catch (e) {}
+    huelle.remove();
+  }
+
+  // Wischen: nach links = weiter, nach rechts = zurück (nur bei überwiegend waagerechter Bewegung).
+  let startX = 0, startY = 0;
+  inhalt.addEventListener("touchstart", function (e) { startX = e.touches[0].clientX; startY = e.touches[0].clientY; }, { passive: true });
+  inhalt.addEventListener("touchend", function (e) {
+    const dx = e.changedTouches[0].clientX - startX, dy = e.changedTouches[0].clientY - startY;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) gehe(dx < 0 ? 1 : -1);
+  }, { passive: true });
+
+  // Zutaten zum Abhaken, Portionen nur für diese Ansicht umrechenbar
+  function zutatenZeigen() {
+    const faktor = function () { return portionen / g.portionen; };
+    const liste = el("div", { class: "einkauf-auswahl" });
+    const zahl = el("span", { class: "schritt-text" });
+    function listeZeichnen3() {
+      zahl.textContent = portionenMitEinheit(g, portionen);
+      liste.replaceChildren.apply(liste, g.zutaten.map(function (z, i) {
+        const an = gehakt.has(i);
+        const menge = z.menge === null || z.menge === undefined ? "" : zahlText(z.menge * faktor()) + (z.einheit ? " " + z.einheit : "");
+        return el("button", {
+          class: "auswahl-zeile" + (an ? " an erledigt" : ""), type: "button", role: "checkbox", "aria-checked": an ? "true" : "false",
+          onclick: function () { if (gehakt.has(i)) gehakt.delete(i); else gehakt.add(i); listeZeichnen3(); }
+        },
+          el("span", { class: "auswahl-haken", text: an ? "✓" : "" }),
+          el("span", { class: "auswahl-name", text: z.name }),
+          el("span", { class: "auswahl-menge", text: menge }));
+      }));
+    }
+    function aendern(d) { const n = portionen + d; if (n >= 1 && n <= 99) { portionen = n; listeZeichnen3(); } }
+    const dunkel = el("div", { class: "koch-dunkel", onclick: function () { blatt2.remove(); dunkel.remove(); } });
+    const blatt2 = el("div", { class: "koch-blatt" },
+      el("div", { class: "koch-griff" }),
+      el("div", { class: "koch-blatt-kopf" },
+        el("b", { text: "Zutaten" }),
+        el("div", { class: "schalter" },
+          el("button", { class: "schritt", type: "button", "aria-label": "Eine Portion weniger", text: "−", onclick: function () { aendern(-1); } }),
+          zahl,
+          el("button", { class: "schritt", type: "button", "aria-label": "Eine Portion mehr", text: "+", onclick: function () { aendern(1); } }))),
+      liste,
+      el("button", { class: "knopf knopf-sekundaer", type: "button", style: "width: 100%; margin-top: 14px", text: "Schließen",
+        onclick: function () { blatt2.remove(); dunkel.remove(); } }));
+    listeZeichnen3();
+    huelle.append(dunkel, blatt2);
+  }
+
+  zeichnen();
+  document.body.append(huelle);
 }
 
 // Zutaten eines Rezepts auf die Einkaufsliste der angezeigten Woche setzen (als eigene Artikel).
